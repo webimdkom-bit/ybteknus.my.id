@@ -16,6 +16,7 @@ import { openEmployeeManager } from "./features/employees/employee-view.js";
 import { openRequestManager } from "./features/requests/request-view.js";
 import { openTaskManager } from "./features/tasks/task-view.js";
 import { openAuditViewer } from "./features/audit-trail/audit-view.js";
+import { openReportViewer } from "./features/reports/report-view.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
 import { getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules } from "./lib/firestore/repositories.js";
@@ -75,7 +76,7 @@ function renderOwnerDashboard(profile) {
        <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
        <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
        <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>${profile?.role === "owner" ? "08" : "06"}</b></a>
-        <a class="nav-item" href="#reports"><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
+        <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
         <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>10</b></a>
       </nav>
 
@@ -200,6 +201,7 @@ function renderOwnerDashboard(profile) {
     if (profile.role === "owner") openLocationSettings({ profile });
   });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
+  document.querySelector("[data-open-reports]")?.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); });
   document.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
 }
 
@@ -216,7 +218,7 @@ function renderAdminDashboard(profile) {
           <a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>03</b></a>
           <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal</span><b>04</b></a>
           <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>05</b></a>
-          <a class="nav-item" href="#reports"><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>06</b></a>
+          <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>06</b></a>
           <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>07</b></a>
         </nav>
         <div class="sidebar-bottom"><div class="profile-mini"><div class="avatar">${initials(profile?.displayName)}</div><div><strong>${profile?.displayName || "User"}</strong><span>Admin · YB Tech</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
@@ -242,6 +244,7 @@ function renderAdminDashboard(profile) {
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
+  document.querySelector("[data-open-reports]")?.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); });
 }
 
 function renderEmployeeDashboard(profile) {
