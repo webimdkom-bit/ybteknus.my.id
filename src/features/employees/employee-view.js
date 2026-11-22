@@ -1,5 +1,6 @@
 import { getBusiness, listEmployeesForBusiness, updateUserProfile } from "../../lib/firestore/repositories.js";
 import { logAuditSafe } from "../audit-trail/index.js";
+import { escapeHtml } from "../../lib/utils/html.js";
 
 export async function openEmployeeManager({ profile }) {
   const overlay = document.createElement("div");
@@ -33,5 +34,5 @@ export async function openEmployeeManager({ profile }) {
 
 function employeeRow(employee, business) {
   const active = employee.status === "active";
-  return `<article class="employee-management-row"><div class="registration-avatar">${(employee.displayName || employee.email || "E").slice(0, 1).toUpperCase()}</div><div class="registration-person"><strong>${employee.displayName || "Tanpa nama"}</strong><span>${employee.email || "Email tidak tersedia"}</span><small>${business.name}${employee.position ? ` · ${employee.position}` : ""}${employee.phone ? ` · ${employee.phone}` : ""}${employee.joinedAt ? ` · sejak ${employee.joinedAt}` : ""}</small></div><span class="employee-status">${active ? "Aktif" : "Nonaktif"}</span><button class="approve-registration" data-toggle-employee="${employee.id}" data-next-status="${active ? "inactive" : "active"}">${active ? "Nonaktifkan" : "Aktifkan"}</button><p class="registration-error" role="alert"></p></article>`;
+  return `<article class="employee-management-row"><div class="registration-avatar">${escapeHtml((employee.displayName || employee.email || "E").slice(0, 1)).toUpperCase()}</div><div class="registration-person"><strong>${escapeHtml(employee.displayName || "Tanpa nama")}</strong><span>${escapeHtml(employee.email || "Email tidak tersedia")}</span><small>${escapeHtml(business.name)}${employee.position ? ` · ${escapeHtml(employee.position)}` : ""}${employee.phone ? ` · ${escapeHtml(employee.phone)}` : ""}${employee.joinedAt ? ` · sejak ${escapeHtml(employee.joinedAt)}` : ""}</small></div><span class="employee-status">${active ? "Aktif" : "Nonaktif"}</span><button class="approve-registration" data-toggle-employee="${employee.id}" data-next-status="${active ? "inactive" : "active"}">${active ? "Nonaktifkan" : "Aktifkan"}</button><p class="registration-error" role="alert"></p></article>`;
 }

@@ -1,6 +1,7 @@
 import { signOutUser } from "../auth/auth-service.js";
 import { createOwnerAccount, deactivateOwner, listOwners } from "./owner-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
+import { escapeHtml } from "../../lib/utils/html.js";
 
 export async function openOwnerManager({ profile }) {
   const overlay = document.createElement("div");
@@ -86,7 +87,7 @@ export async function openOwnerManager({ profile }) {
 
 function ownerRow(owner, currentUserId) {
   const active = owner.status === "active";
-  return `<article class="managed-owner-row ${active ? "" : "is-inactive"}"><div class="owner-row-mark">${(owner.displayName || owner.email || "O").slice(0, 1).toUpperCase()}</div><div class="managed-owner-info"><strong>${owner.displayName || "Tanpa nama"}${owner.id === currentUserId ? " <small>(Anda)</small>" : ""}</strong><span>${owner.email || "Email tidak tersedia"}</span></div><div class="owner-status">${active ? "Aktif" : "Nonaktif"}</div>${active ? `<button class="remove-owner" data-deactivate-owner="${owner.id}">Hapus akses</button>` : ""}</article>`;
+  return `<article class="managed-owner-row ${active ? "" : "is-inactive"}"><div class="owner-row-mark">${escapeHtml((owner.displayName || owner.email || "O").slice(0, 1)).toUpperCase()}</div><div class="managed-owner-info"><strong>${escapeHtml(owner.displayName || "Tanpa nama")}${owner.id === currentUserId ? " <small>(Anda)</small>" : ""}</strong><span>${escapeHtml(owner.email || "Email tidak tersedia")}</span></div><div class="owner-status">${active ? "Aktif" : "Nonaktif"}</div>${active ? `<button class="remove-owner" data-deactivate-owner="${owner.id}">Hapus akses</button>` : ""}</article>`;
 }
 
 function humanizeOwnerError(error) {

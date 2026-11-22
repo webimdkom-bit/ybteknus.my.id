@@ -10,6 +10,7 @@ import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 import { applyAttendanceCorrection } from "../attendance-corrections/correction-service.js";
 import { listAttendanceCorrectionsForUser, createOvertime, listOvertimeForUser, updateOvertime } from "../../lib/firestore/repositories.js";
+import { escapeHtml } from "../../lib/utils/html.js";
 
 const REQUEST_TYPES = Object.freeze([
   ["permission", "Izin"],
@@ -66,8 +67,8 @@ async function setupEmployeeRequests(overlay, profile) {
     const requests = (await listOperationalRequestsForUser(profile.uid)).sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
     const corrections = (await listAttendanceCorrectionsForUser(profile.uid)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const overtime = (await listOvertimeForUser(profile.uid)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
-    const correctionRows = corrections.map((item) => `<article class="request-row is-approved"><div class="request-row-mark">↺</div><div class="request-person"><strong>Koreksi absensi · ${item.date}</strong><span>${item.type} · ${item.before?.recordedTime || "-"} → ${item.after?.recordedTime || "-"}</span><small>${item.reason || "Tanpa alasan"}</small></div><span class="request-status approved">Disetujui</span></article>`).join("");
-    const overtimeRows = overtime.map((item) => `<article class="request-row is-${item.status === "approved" ? "approved" : "pending"}"><div class="request-row-mark">+</div><div class="request-person"><strong>Lembur · ${item.date}</strong><span>${item.startTime}–${item.endTime} · ${Math.round((item.durationMinutes || 0) / 60 * 100) / 100} jam</span><small>${item.reason || "Tanpa alasan"}</small></div><span class="request-status ${item.status === "approved" ? "approved" : "pending"}">${item.status}</span></article>`).join("");
+    const correctionRows = corrections.map((item) => `<article class="request-row is-approved"><div class="request-row-mark">↺</div><div class="request-person"><strong>Koreksi absensi · ${item.date}</strong><span>${escapeHtml(item.type)} · ${escapeHtml(item.before?.recordedTime || "-")} → ${escapeHtml(item.after?.recordedTime || "-")}</span><small>${escapeHtml(item.reason || "Tanpa alasan")}</small></div><span class="request-status approved">Disetujui</span></article>`).join("");
+    const overtimeRows = overtime.map((item) => `<article class="request-row is-${item.status === "approved" ? "approved" : "pending"}"><div class="request-row-mark">+</div><div class="request-person"><strong>Lembur · ${item.date}</strong><span>${escapeHtml(item.startTime)}–${escapeHtml(item.endTime)} · ${Math.round((item.durationMinutes || 0) / 60 * 100) / 100} jam</span><small>${escapeHtml(item.reason || "Tanpa alasan")}</small></div><span class="request-status ${item.status === "approved" ? "approved" : "pending"}">${item.status}</span></article>`).join("");
     const rows = requests.map(requestRow).join("") + correctionRows + overtimeRows;
     list.innerHTML = rows ? rows : `<div class="request-empty-state"><strong>Belum ada pengajuan.</strong><span>Pengajuan Anda akan tampil di sini.</span></div>`;
   };
@@ -184,10 +185,10 @@ async function setupRequestReview(overlay, profile) {
 
 function requestRow(request) {
   const label = REQUEST_TYPES.find(([value]) => value === request.type)?.[1] || request.type;
-  return `<article class="request-row"><div class="request-row-mark">${label.slice(0, 1)}</div><div><strong>${label}</strong><span>${request.startDate} – ${request.endDate}</span><small>${request.reason}</small></div><b class="request-status ${request.status}">${request.status}</b></article>`;
+  return `<article class="request-row"><div class="request-row-mark">${label.slice(0, 1)}</div><div><strong>${label}</strong><span>${request.startDate} – ${request.endDate}</span><small>${escapeHtml(request.reason)}</small></div><b class="request-status ${request.status}">${request.status}</b></article>`;
 }
 
 function reviewRequestRow(request) {
   const label = REQUEST_TYPES.find(([value]) => value === request.type)?.[1] || request.type;
-  return `<article class="request-row"><div class="request-row-mark">${label.slice(0, 1)}</div><div><strong>${label}</strong><span>${request.startDate} – ${request.endDate} · ${request.businessId}</span><small>${request.reason}</small></div><div class="request-actions"><button class="approve-registration" data-request-action="approved" data-request-id="${request.id}">Setujui</button><button class="reject-registration" data-request-action="rejected" data-request-id="${request.id}">Tolak</button></div><p class="request-error" role="alert"></p></article>`;
+  return `<article class="request-row"><div class="request-row-mark">${label.slice(0, 1)}</div><div><strong>${label}</strong><span>${escapeHtml(request.startDate)} – ${escapeHtml(request.endDate)} · ${escapeHtml(request.businessId)}</span><small>${escapeHtml(request.reason)}</small></div><div class="request-actions"><button class="approve-registration" data-request-action="approved" data-request-id="${request.id}">Setujui</button><button class="reject-registration" data-request-action="rejected" data-request-id="${request.id}">Tolak</button></div><p class="request-error" role="alert"></p></article>`;
 }

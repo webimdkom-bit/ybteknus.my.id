@@ -1,6 +1,7 @@
 import { listBusinessesForOrganization, listMembershipsForUser } from "../../lib/firestore/repositories.js";
 import { ADMIN_PERMISSION_OPTIONS, createAdminAccount, deactivateAdmin, listAdmins, updateAdminAccess } from "./admin-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
+import { escapeHtml } from "../../lib/utils/html.js";
 
 export async function openAdminManager({ profile }) {
   const overlay = document.createElement("div");
@@ -129,7 +130,7 @@ function resetAdminForm(form, businessList, businesses, overlay) {
 
 function adminRow(admin, businesses) {
   const names = (admin.businessIds || []).map((id) => businesses.find((business) => business.id === id)?.name || "Bisnis").join(", ");
-  return `<article class="managed-owner-row ${admin.status === "active" ? "" : "is-inactive"}"><div class="owner-row-mark">${(admin.displayName || admin.email || "A").slice(0, 1).toUpperCase()}</div><div class="managed-owner-info"><strong>${admin.displayName || "Tanpa nama"}</strong><span>${admin.email || "Email tidak tersedia"}</span><small>${names || "Belum ada bisnis"}</small></div><div class="owner-status">${admin.status === "active" ? "Aktif" : "Nonaktif"}</div>${admin.status === "active" ? `<button class="remove-owner" data-edit-admin="${admin.id}">Atur akses</button><button class="remove-owner" data-deactivate-admin="${admin.id}">Nonaktifkan</button>` : ""}</article>`;
+  return `<article class="managed-owner-row ${admin.status === "active" ? "" : "is-inactive"}"><div class="owner-row-mark">${escapeHtml((admin.displayName || admin.email || "A").slice(0, 1)).toUpperCase()}</div><div class="managed-owner-info"><strong>${escapeHtml(admin.displayName || "Tanpa nama")}</strong><span>${escapeHtml(admin.email || "Email tidak tersedia")}</span><small>${escapeHtml(names || "Belum ada bisnis")}</small></div><div class="owner-status">${admin.status === "active" ? "Aktif" : "Nonaktif"}</div>${admin.status === "active" ? `<button class="remove-owner" data-edit-admin="${admin.id}">Atur akses</button><button class="remove-owner" data-deactivate-admin="${admin.id}">Nonaktifkan</button>` : ""}</article>`;
 }
 
 function humanizeAdminError(error) {

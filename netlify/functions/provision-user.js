@@ -2,6 +2,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "./_shared/admin";
 import { verifyFirebaseToken } from "./_shared/auth";
+import { ADMIN_PERMISSIONS } from "./_shared/permissions";
 
 function json(statusCode, payload) {
   return { statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) };
@@ -28,8 +29,20 @@ export const handler = async (event) => {
     return json(403, { error: "Hanya Owner organization yang dapat membuat akun." });
   }
 
-  const access = Array.isArray(body.access) ? body.access : [];
-  const businessIds = access.map((item) => String(item.businessId || "").trim()).filter(Boolean);
+  const rawAccess = Array.isArray(body.access) ? body.access : [];
+  const businessIds = [...new Set(rawAccess.map((item) => String(item.businessId || "").trim()).filter(Boolean))];
+  if (businessIds.length) {
+    const snapshots = await Promise.all(businessIds.map((id) => db.collection("businesses").doc(id).get()));
+    if (snapshots.some((snapshot) => !snapshot.exists || snapshot.data().organizationId !== organizationId)) {
+      return json(400, { error: "Bisnis tidak valid untuk organization ini." });
+    }
+  }
+  const access = rawAccess
+    .filter((item) => businessIds.includes(String(item.businessId || "").trim()))
+    .map((item) => ({
+      businessId: String(item.businessId).trim(),
+      permissions: (Array.isArray(item.permissions) ? item.permissions : []).filter((permission) => ADMIN_PERMISSIONS.includes(permission)),
+    }));
   let user;
   try {
     user = await getAuth(app).createUser({
@@ -48,7 +61,7 @@ export const handler = async (event) => {
     status: "active",
     organizationId,
     businessIds: role === "admin" ? businessIds : [],
-    permissions: [],
+    permissions: role === "admin" ? [...new Set(access.flatMap((item) => item.permissions || []))] : [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });

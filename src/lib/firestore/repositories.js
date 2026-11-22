@@ -134,6 +134,7 @@ export async function saveAdminAccess({ userId, organizationId, access }) {
   });
   batch.update(doc(db, COLLECTIONS.USERS, userId), {
     businessIds: access.map((item) => item.businessId),
+    permissions: [...new Set(access.flatMap((item) => item.permissions || []))],
     updatedAt: timestamp,
   });
   await batch.commit();

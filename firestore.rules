@@ -74,8 +74,8 @@ service cloud.firestore {
         || (isAdmin()
           && resource.data.organizationId == currentUser().organizationId
           && resource.data.businessIds.hasAny(currentUser().businessIds)
-          && (adminHasPermission(resource.data.businessIds[0], 'manageEmployees')
-            || adminHasPermission(resource.data.businessIds[0], 'manageTasks')));
+          && (currentUser().permissions.hasAny(['manageEmployees'])
+            || currentUser().permissions.hasAny(['manageTasks'])));
       allow update: if (
           ownUser(userId)
           && request.resource.data.organizationId == resource.data.organizationId
@@ -89,7 +89,7 @@ service cloud.firestore {
           isAdmin()
           && resource.data.organizationId == currentUser().organizationId
           && resource.data.businessIds.hasAny(currentUser().businessIds)
-          && adminHasPermission(resource.data.businessIds[0], 'manageEmployees')
+          && currentUser().permissions.hasAny(['manageEmployees'])
           && request.resource.data.organizationId == resource.data.organizationId
         );
       allow delete: if isOwner()
@@ -215,18 +215,20 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow read: if ownUser(request.auth.uid)
+      allow read: if signedIn()
         && resource.data.assignedTo.hasAny([request.auth.uid])
         || canManageBusiness(resource.data.organizationId, resource.data.businessId)
-        || adminHasPermission(resource.data.businessId, 'viewReports');
+        || adminHasPermission(resource.data.businessId, 'manageTasks');
       allow create: if isOwner()
         || (adminHasPermission(request.resource.data.businessId, 'manageTasks')
           && sameOrganization(request.resource.data.organizationId));
       allow update: if isOwner()
         || (adminHasPermission(resource.data.businessId, 'manageTasks')
           && sameOrganization(resource.data.organizationId))
-        || (resource.data.assignedTo.hasAny([request.auth.uid])
-          && ownUser(request.auth.uid));
+        || (signedIn()
+          && resource.data.assignedTo.hasAny([request.auth.uid])
+          && sameOrganization(resource.data.organizationId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'checklist', 'progress', 'timeStatus', 'updatedAt']));
       allow delete: if isOwner();
     }
 

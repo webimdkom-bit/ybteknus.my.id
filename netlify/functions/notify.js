@@ -15,7 +15,8 @@ export const handler = async (event) => {
 
   const body = typeof event.body === "string" ? JSON.parse(event.body || "{}") : event.body || {};
   const type = String(body.type || "").trim();
-  const title = String(body.title || "").trim();
+  const title = String(body.title || "").trim().slice(0, 120);
+  const message = String(body.body || "").trim().slice(0, 500);
   if (!type || !title) return json(400, { error: "type dan title wajib diisi." });
 
   const db = getFirestore(getAdminApp());
@@ -31,9 +32,20 @@ export const handler = async (event) => {
   }
 
   let recipients = [];
-  const explicit = Array.isArray(body.userIds) ? body.userIds.filter(Boolean) : [];
+  const explicit = Array.isArray(body.userIds) ? body.userIds.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()) : [];
   if (explicit.length) {
-    recipients = explicit;
+    const snapshots = await Promise.all(explicit.map((id) => db.collection("users").doc(id).get()));
+    recipients = snapshots.filter((snapshot) => {
+      if (!snapshot.exists) return false;
+      const target = snapshot.data();
+      if (target.organizationId !== organizationId) return false;
+      if (actor.role === "owner") return true;
+      const actorBusinesses = actor.businessIds || [];
+      const targetBusinesses = target.businessIds || [];
+      return businessId
+        ? actorBusinesses.includes(businessId) && targetBusinesses.includes(businessId)
+        : actorBusinesses.some((id) => targetBusinesses.includes(id));
+    }).map((snapshot) => snapshot.id);
   } else if (body.audience === "owner" || body.audience === "admins" || body.audience === "employees") {
     const users = await db.collection("users").where("organizationId", "==", organizationId).get();
     const candidates = users.docs.filter((doc) => {
@@ -68,7 +80,7 @@ export const handler = async (event) => {
       businessId: businessId || null,
       type,
       title,
-      body: String(body.body || ""),
+      body: message,
       targetType: body.targetType || null,
       targetId: body.targetId || null,
       actorId: uid,

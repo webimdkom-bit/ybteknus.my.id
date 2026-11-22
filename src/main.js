@@ -283,7 +283,7 @@ function renderEmployeeDashboard(profile) {
         <main class="dashboard role-dashboard employee-dashboard" id="overview">
           <section class="hero-row"><div><p class="eyebrow">MY WORKDAY</p><h1>Good morning,<br><em>${firstName}.</em></h1><p class="hero-copy">Lihat jadwal, absensi, dan tugas yang perlu Anda selesaikan hari ini.</p></div><button class="primary-button" data-open-attendance><i data-lucide="clock-3"></i> Buka absensi</button></section>
           <section class="employee-action-grid"><article class="employee-attendance-card metric-dark"><div><p class="eyebrow">ABSENSI HARI INI</p><h2 data-employee-attendance-status>Memuat status...</h2><p>Aktifkan GPS untuk melakukan check-in di lokasi bisnis.</p></div><button class="primary-button" data-open-attendance>Check-in sekarang <span>→</span></button></article><article class="panel employee-schedule-card"><div class="panel-heading"><div><h2>Jadwal hari ini</h2><p>Shift dan jam kerja Anda</p></div><i data-lucide="calendar-days"></i></div><div class="role-empty-state" data-employee-schedule><strong>Memuat jadwal...</strong><span>Jadwal akan muncul setelah Owner atau Admin menetapkan shift.</span></div></article></section>
-          <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Riwayat absensi</h2><p>Aktivitas absensi terbaru Anda</p></div></div><div class="employee-attendance-history" data-employee-attendance-history><div class="role-empty-state"><strong>Memuat riwayat...</strong></div></div></article><aside class="quick-panel"><div class="quick-label">MY PROFILE</div><h2>${firstName}<br><em>at work.</em></h2><div class="employee-profile-summary"><strong>${profile?.displayName || "Employee"}</strong><span>${profile?.email || "Email belum tersedia"}</span><span data-employee-business>Bisnis sedang dimuat...</span></div></aside></section>
+          <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Riwayat absensi</h2><p>Aktivitas absensi terbaru Anda</p></div></div><div class="employee-attendance-history" data-employee-attendance-history><div class="role-empty-state"><strong>Memuat riwayat...</strong></div></div></article><aside class="quick-panel"><div class="quick-label">MY PROFILE</div><h2>${firstName}<br><em>at work.</em></h2><div class="employee-profile-summary"><strong>${profile?.displayName || "Employee"}</strong><span>${escapeHtml(profile?.email || "Email belum tersedia")}</span><span data-employee-business>Bisnis sedang dimuat...</span></div></aside></section>
         </main>
       </div>
     </div>
@@ -320,7 +320,7 @@ async function loadEmployeeDashboardData(profile) {
     const todaySchedule = schedules.find((schedule) => schedule.businessId === businessId && schedule.date === today && schedule.status !== "cancelled");
     const todayShift = todaySchedule ? await getShift(todaySchedule.shiftId) : null;
     scheduleElement.innerHTML = todayShift
-      ? `<strong>${todayShift.name}</strong><span>${todayShift.startTime} – ${todayShift.endTime} · toleransi ${todayShift.toleranceMinutes || 0} menit</span>`
+      ? `<strong>${escapeHtml(todayShift.name)}</strong><span>${escapeHtml(todayShift.startTime)} – ${escapeHtml(todayShift.endTime)} · toleransi ${todayShift.toleranceMinutes || 0} menit</span>`
       : "<strong>Belum ada jadwal hari ini.</strong><span>Owner atau Admin belum menetapkan shift untuk tanggal ini.</span>";
 
     const todayAttendance = attendance.filter((event) => event.businessId === businessId && getAttendanceDate(event) === today).sort((a, b) => getAttendanceTime(a).localeCompare(getAttendanceTime(b)));
@@ -328,10 +328,10 @@ async function loadEmployeeDashboardData(profile) {
     const checkOut = todayAttendance.find((event) => event.type === "check-out");
     statusElement.textContent = checkOut ? checkOut.attendanceStatus || "Tercatat" : checkIn ? "Sudah check-in" : "Belum check-in";
     const history = attendance.filter((event) => event.businessId === businessId).sort((a, b) => `${getAttendanceDate(b)}${getAttendanceTime(b)}`.localeCompare(`${getAttendanceDate(a)}${getAttendanceTime(a)}`)).slice(0, 8);
-    historyElement.innerHTML = history.length ? history.map((event) => `<div class="employee-history-row"><div><strong>${event.type === "check-in" ? "Check-in" : "Check-out"}</strong><span>${formatDateLabel(getAttendanceDate(event))} · ${getAttendanceTime(event) || "waktu tersimpan"}</span></div><b>${event.attendanceStatus || "tercatat"}</b></div>`).join("") : "<div class=\"role-empty-state\"><strong>Belum ada riwayat.</strong><span>Aktivitas check-in dan check-out Anda akan tampil di sini.</span></div>";
+    historyElement.innerHTML = history.length ? history.map((event) => `<div class="employee-history-row"><div><strong>${event.type === "check-in" ? "Check-in" : "Check-out"}</strong><span>${formatDateLabel(getAttendanceDate(event))} · ${getAttendanceTime(event) || "waktu tersimpan"}</span></div><b>${escapeHtml(event.attendanceStatus || "tercatat")}</b></div>`).join("") : "<div class=\"role-empty-state\"><strong>Belum ada riwayat.</strong><span>Aktivitas check-in dan check-out Anda akan tampil di sini.</span></div>";
   } catch (error) {
-    scheduleElement.innerHTML = `<strong>Data belum tersedia.</strong><span>${error.message}</span>`;
-    historyElement.innerHTML = `<div class="role-empty-state"><strong>Riwayat gagal dimuat.</strong><span>${error.message}</span></div>`;
+    scheduleElement.innerHTML = `<strong>Data belum tersedia.</strong><span>${escapeHtml(error.message)}</span>`;
+    historyElement.innerHTML = `<div class="role-empty-state"><strong>Riwayat gagal dimuat.</strong><span>${escapeHtml(error.message)}</span></div>`;
   }
 }
 
@@ -427,7 +427,7 @@ async function refreshDashboard(profile) {
 }
 
 function renderUnknownRoleState(profile) {
-  app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><p class="eyebrow">ROLE NOT CONFIGURED</p><h1>Access<br><em>pending.</em></h1><p>Role akun ${profile?.email || "ini"} belum dikonfigurasi. Hubungi Owner perusahaan.</p><button class="primary-button" data-sign-out>Kembali ke login</button></section></main>`;
+  app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><p class="eyebrow">ROLE NOT CONFIGURED</p><h1>Access<br><em>pending.</em></h1><p>Role akun ${escapeHtml(profile?.email || "ini")} belum dikonfigurasi. Hubungi Owner perusahaan.</p><button class="primary-button" data-sign-out>Kembali ke login</button></section></main>`;
   app.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
 }
 
@@ -450,7 +450,7 @@ async function wireBusinessSwitcher(profile, onScopeChange) {
   try {
     const businesses = await listBusinessesForOrganization(profile.organizationId);
     const activeBusinesses = businesses.filter((business) => business.status !== "inactive");
-    menu.innerHTML = `<button type="button" data-business-scope="">All businesses<span>Ringkasan seluruh organization</span></button>${activeBusinesses.map((business) => `<button type="button" data-business-scope="${business.id}">${business.name}<span>${business.city || "Kota belum diatur"}</span></button>`).join("")}`;
+    menu.innerHTML = `<button type="button" data-business-scope="">All businesses<span>Ringkasan seluruh organization</span></button>${activeBusinesses.map((business) => `<button type="button" data-business-scope="${business.id}">${escapeHtml(business.name)}<span>${escapeHtml(business.city || "Kota belum diatur")}</span></button>`).join("")}`;
     button.addEventListener("click", (event) => { event.stopPropagation(); menu.hidden = !menu.hidden; });
     menu.querySelectorAll("[data-business-scope]").forEach((option) => option.addEventListener("click", () => {
       const business = activeBusinesses.find((item) => item.id === option.dataset.businessScope);
@@ -465,7 +465,7 @@ async function wireBusinessSwitcher(profile, onScopeChange) {
     }));
     document.addEventListener("click", (event) => { if (!menu.contains(event.target) && event.target !== button) menu.hidden = true; });
   } catch (error) {
-    menu.innerHTML = `<span class="business-switcher-error">${error.message}</span>`;
+    menu.innerHTML = `<span class="business-switcher-error">${escapeHtml(error.message)}</span>`;
   }
 }
 
@@ -494,7 +494,7 @@ subscribeToAuth(async (user) => {
       renderAuthScreen(app);
       return;
     }
-    if (profile.status === "inactive") {
+    if (profile.status === "inactive" || profile.status === "suspended") {
       renderInactiveState();
       return;
     }
@@ -508,7 +508,7 @@ subscribeToAuth(async (user) => {
     }
     renderDashboard(profile);
   } catch (error) {
-    app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><p class="eyebrow">WORKSPACE ERROR</p><h1>Could not<br><em>load.</em></h1><p>${error.message}</p><button class="primary-button" data-sign-out>Keluar</button></section></main>`;
+    app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><p class="eyebrow">WORKSPACE ERROR</p><h1>Could not<br><em>load.</em></h1><p>${escapeHtml(error.message)}</p><button class="primary-button" data-sign-out>Keluar</button></section></main>`;
     app.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
   }
 });

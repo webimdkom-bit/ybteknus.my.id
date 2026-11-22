@@ -277,7 +277,7 @@ export async function loadAdminDashboardData(profile) {
   let tasks = flatten(taskGroups);
   let reports = flatten(reportGroups);
 
-  if (![...permissionByBusiness.values()].some((permissions) => permissions.has("viewReports"))) tasks = [];
+  if (![...permissionByBusiness.values()].some((permissions) => permissions.has("manageTasks"))) tasks = [];
   if (![...permissionByBusiness.values()].some((permissions) => permissions.has("reviewSubmissions"))) reports = [];
 
   return buildViewModel({

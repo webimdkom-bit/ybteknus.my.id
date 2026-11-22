@@ -2,6 +2,7 @@ import { listBusinessesForOrganization } from "../../lib/firestore/repositories.
 import { approveEmployeeRegistration, listPendingRegistrations, rejectEmployeeRegistration } from "./registration-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
+import { escapeHtml } from "../../lib/utils/html.js";
 
 export async function openRegistrationManager({ profile }) {
   const overlay = document.createElement("div");
@@ -43,11 +44,11 @@ export async function openRegistrationManager({ profile }) {
           button.closest(".registration-row").querySelector(".registration-error").textContent = error.message;
         }
       }));
-    } catch (error) { list.innerHTML = `<p class="registration-error">${error.message}</p>`; }
+    } catch (error) { list.innerHTML = `<p class="registration-error">${escapeHtml(error.message)}</p>`; }
   };
   await loadRegistrations();
 }
 
 function registrationRow(registration, businessNames) {
-  return `<article class="registration-row"><div class="registration-avatar">${registration.name.slice(0, 1).toUpperCase()}</div><div class="registration-person"><strong>${registration.name}</strong><span>${registration.email}</span><small>${businessNames.get(registration.businessId) || registration.businessName || "Bisnis"}</small></div><div class="registration-actions"><button class="approve-registration" data-registration-action="approve" data-registration-id="${registration.id}">Approve</button><button class="reject-registration" data-registration-action="reject" data-registration-id="${registration.id}">Reject</button></div><p class="registration-error" role="alert"></p></article>`;
+  return `<article class="registration-row"><div class="registration-avatar">${escapeHtml(registration.name.slice(0, 1)).toUpperCase()}</div><div class="registration-person"><strong>${escapeHtml(registration.name)}</strong><span>${escapeHtml(registration.email)}</span><small>${escapeHtml(businessNames.get(registration.businessId) || registration.businessName || "Bisnis")}</small></div><div class="registration-actions"><button class="approve-registration" data-registration-action="approve" data-registration-id="${registration.id}">Approve</button><button class="reject-registration" data-registration-action="reject" data-registration-id="${registration.id}">Reject</button></div><p class="registration-error" role="alert"></p></article>`;
 }
