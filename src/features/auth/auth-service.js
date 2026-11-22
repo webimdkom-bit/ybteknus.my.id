@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../../lib/firebase/firebase.js";
 import { createRegistration, createUserProfile, getUserProfile } from "../../lib/firestore/repositories.js";
+import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 
 export function subscribeToAuth(callback) {
   return onAuthStateChanged(auth, callback);
@@ -40,6 +41,17 @@ export async function registerEmployee({ name, email, password, business }) {
     businessId: business.id,
     businessName: business.name,
   });
+
+  const payload = {
+    type: NOTIFICATION_TYPES.registrationNew,
+    title: "Registrasi karyawan baru",
+    body: `${name} mendaftar pada ${business.name} dan menunggu persetujuan.`,
+    organizationId: business.organizationId,
+    businessId: business.id,
+    targetType: "registration",
+  };
+  notifySafe({ ...payload, audience: "owner" });
+  notifySafe({ ...payload, audience: "admins", permission: "manageEmployees" });
 
   return result.user;
 }

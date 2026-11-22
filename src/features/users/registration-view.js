@@ -1,6 +1,7 @@
 import { listBusinessesForOrganization } from "../../lib/firestore/repositories.js";
 import { approveEmployeeRegistration, listPendingRegistrations, rejectEmployeeRegistration } from "./registration-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
+import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 
 export async function openRegistrationManager({ profile }) {
   const overlay = document.createElement("div");
@@ -30,9 +31,11 @@ export async function openRegistrationManager({ profile }) {
           if (button.dataset.registrationAction === "approve") {
             await approveEmployeeRegistration(registration);
             logAuditSafe({ profile, action: "employee_approved", targetType: "registration", targetId: registration.id, businessId: registration.businessId, metadata: { userId: registration.userId, name: registration.name, email: registration.email } });
+            notifySafe({ type: NOTIFICATION_TYPES.registrationApproved, title: "Registrasi disetujui", body: `Akun Anda pada ${registration.businessName || "bisnis"} telah disetujui.`, organizationId: registration.organizationId, businessId: registration.businessId, targetType: "registration", targetId: registration.id, userIds: [registration.userId] });
           } else {
             await rejectEmployeeRegistration(registration);
             logAuditSafe({ profile, action: "employee_rejected", targetType: "registration", targetId: registration.id, businessId: registration.businessId, metadata: { userId: registration.userId, name: registration.name, email: registration.email } });
+            notifySafe({ type: NOTIFICATION_TYPES.registrationRejected, title: "Registrasi ditolak", body: `Pengajuan akun Anda pada ${registration.businessName || "bisnis"} ditolak.`, organizationId: registration.organizationId, businessId: registration.businessId, targetType: "registration", targetId: registration.id, userIds: [registration.userId] });
           }
           await loadRegistrations();
         } catch (error) {

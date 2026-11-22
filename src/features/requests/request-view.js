@@ -7,6 +7,7 @@ import {
 } from "../../lib/firestore/repositories.js";
 import { getBusiness } from "../../lib/firestore/repositories.js";
 import { logAuditSafe } from "../audit-trail/index.js";
+import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 
 const REQUEST_TYPES = Object.freeze([
   ["permission", "Izin"],
@@ -60,6 +61,17 @@ async function setupEmployeeRequests(overlay, profile) {
     try {
       const request = await createOperationalRequest({ ...data, userId: profile.uid, organizationId: profile.organizationId });
       logAuditSafe({ profile, action: "request_submitted", targetType: "request", targetId: request?.id || null, businessId: data.businessId, metadata: { type: data.type } });
+      const permission = data.type === "attendance-correction" ? "approveCorrections" : data.type === "overtime" ? "manageOvertime" : "approveLeave";
+      const notification = {
+        title: data.type === "attendance-correction" ? "Pengajuan koreksi absensi" : data.type === "overtime" ? "Pengajuan lembur" : "Pengajuan izin/cuti baru",
+        body: `Pengajuan ${data.type} menunggu persetujuan.`,
+        organizationId: profile.organizationId,
+        businessId: data.businessId,
+        targetType: "request",
+        targetId: request?.id || null,
+      };
+      notifySafe({ ...notification, type: NOTIFICATION_TYPES.requestSubmitted, audience: "owner" });
+      notifySafe({ ...notification, type: data.type === "attendance-correction" ? NOTIFICATION_TYPES.correctionRequested : data.type === "overtime" ? NOTIFICATION_TYPES.overtimeInfo : NOTIFICATION_TYPES.requestSubmitted, audience: "admins", permission });
       form.reset();
       message.textContent = "Pengajuan berhasil dikirim dan menunggu persetujuan.";
       await load();
@@ -84,6 +96,16 @@ async function setupRequestReview(overlay, profile) {
       try {
         await reviewOperationalRequest(request.id, { status: button.dataset.requestAction, reviewedBy: profile.uid, reviewedAt: new Date().toISOString(), reviewNote: reviewNote || "" });
         logAuditSafe({ profile, action: button.dataset.requestAction === "approved" ? "request_approved" : "request_rejected", targetType: "request", targetId: request.id, businessId: request.businessId, metadata: { type: request.type, reviewNote: reviewNote || "" } });
+        notifySafe({
+          type: button.dataset.requestAction === "approved" ? NOTIFICATION_TYPES.requestApproved : NOTIFICATION_TYPES.requestRejected,
+          title: button.dataset.requestAction === "approved" ? "Pengajuan disetujui" : "Pengajuan ditolak",
+          body: `${request.type}${reviewNote ? ` · ${reviewNote}` : ""}`,
+          organizationId: request.organizationId,
+          businessId: request.businessId,
+          targetType: "request",
+          targetId: request.id,
+          userIds: [request.userId],
+        });
         await setupRequestReview(overlay, profile);
       } catch (error) { button.closest(".request-row").querySelector(".request-error").textContent = error.message; button.disabled = false; }
     }));

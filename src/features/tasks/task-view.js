@@ -16,6 +16,7 @@ import {
 } from "../../lib/firestore/repositories.js";
 import { requestUploadSignature, uploadFileToCloudinary } from "../files/file-upload-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
+import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 
 export async function openTaskManager({ profile }) {
   const overlay = document.createElement("div");
@@ -85,6 +86,7 @@ async function setupTaskForm(overlay, profile, canManage) {
         checklist: data.checklist.split("\n").map((label, index) => ({ id: `item-${index + 1}`, label: label.trim(), completed: false })).filter((item) => item.label),
       });
       logAuditSafe({ profile, action: "task_created", targetType: "task", targetId: task?.id || null, businessId: data.businessId, metadata: { title: data.title.trim(), assignedTo: [data.assignedTo], priority: data.priority } });
+      notifySafe({ type: NOTIFICATION_TYPES.taskCreated, title: "Tugas baru", body: data.title.trim(), organizationId: profile.organizationId, businessId: data.businessId, targetType: "task", targetId: task?.id || null, userIds: [data.assignedTo] });
       form.reset();
       message.textContent = "Tugas berhasil dibuat.";
       await loadTaskList(overlay, profile, canManage);
@@ -189,6 +191,11 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
       const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: uploaded.secure_url, checklist: task.checklist || [] });
       logAuditSafe({ profile, action: "report_submitted", targetType: "taskReport", targetId: report?.id || null, businessId: task.businessId, metadata: { taskId: task.id, fileName: file.name } });
       logAuditSafe({ profile, action: "file_uploaded", targetType: "file", targetId: uploaded.public_id || null, businessId: task.businessId, metadata: { fileName: file.name, taskId: task.id } });
+      const notification = { type: NOTIFICATION_TYPES.reportSubmitted, title: "Laporan tugas dikirim", body: description, organizationId: task.organizationId, businessId: task.businessId, targetType: "taskReport", targetId: report?.id || null };
+      notifySafe({ ...notification, audience: "owner" });
+      notifySafe({ ...notification, audience: "admins", permission: "reviewSubmissions" });
+      const parent = tasks.find((item) => item.id === task.parentTaskId);
+      if (parent) notifySafe({ ...notification, title: "Laporan tugas turunan dikirim", userIds: parent.assignedTo || [] });
       await updateTask(task.id, { status: "submitted" });
     } catch (error) { window.alert(error.message); }
     input.disabled = false;
@@ -201,6 +208,18 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
     const report = reports.find((item) => item.id === button.dataset.reportId);
     const task = tasks.find((item) => item.id === button.dataset.taskId);
     logAuditSafe({ profile, action: button.dataset.reportAction === "approved" ? "report_approved" : "report_revision_requested", targetType: "taskReport", targetId: button.dataset.reportId, businessId: task?.businessId || report?.businessId || null, metadata: { taskId: button.dataset.taskId, reviewNote: note } });
+    if (report?.userId) {
+      notifySafe({
+        type: button.dataset.reportAction === "approved" ? NOTIFICATION_TYPES.reportApproved : NOTIFICATION_TYPES.revisionRequested,
+        title: button.dataset.reportAction === "approved" ? "Laporan disetujui" : "Permintaan revisi laporan",
+        body: note || task?.title || "",
+        organizationId: report.organizationId || task?.organizationId,
+        businessId: report.businessId || task?.businessId,
+        targetType: "taskReport",
+        targetId: report.id,
+        userIds: [report.userId],
+      });
+    }
     await updateTask(button.dataset.taskId, { status: button.dataset.reportAction === "approved" ? "approved" : "revision" });
     if (task?.parentTaskId) await syncParentProgress(task.parentTaskId, tasks, profile);
     await loadTaskList(overlay, profile, canManage);
@@ -244,6 +263,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
         checklist: [],
       });
       logAuditSafe({ profile, action: "subtask_created", targetType: "task", targetId: child?.id || null, businessId: task.businessId, metadata: { parentTaskId: task.id, title, assignedTo: [assignee] } });
+      notifySafe({ type: NOTIFICATION_TYPES.taskCreated, title: "Subtugas baru", body: `${title} · dari tugas ${task.title}`, organizationId: task.organizationId, businessId: task.businessId, targetType: "task", targetId: child?.id || null, userIds: [assignee] });
       await syncParentProgress(task.id, tasks, profile);
       await loadTaskList(overlay, profile, canManage);
     } catch (error) { window.alert(error.message); button.disabled = false; }
@@ -257,6 +277,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
     try {
       const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: "", checklist: [], isFinal: true });
       logAuditSafe({ profile, action: "final_report_submitted", targetType: "taskReport", targetId: report?.id || null, businessId: task.businessId, metadata: { taskId: task.id } });
+      notifySafe({ type: NOTIFICATION_TYPES.reportSubmitted, title: "Laporan akhir Admin dikirim", body: description, organizationId: task.organizationId, businessId: task.businessId, targetType: "taskReport", targetId: report?.id || null, audience: "owner" });
       await updateTask(task.id, { status: "submitted" });
       await loadTaskList(overlay, profile, canManage);
     } catch (error) { window.alert(error.message); button.disabled = false; }
@@ -266,6 +287,19 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
     await reviewTaskReport(button.dataset.finalReportId, { status: button.dataset.finalAction, reviewedBy: profile.uid, reviewNote: note, reviewedAt: new Date().toISOString() });
     const task = tasks.find((item) => item.id === button.dataset.finalTaskId);
     logAuditSafe({ profile, action: button.dataset.finalAction === "approved" ? "final_report_approved" : "final_report_revision_requested", targetType: "taskReport", targetId: button.dataset.finalReportId, businessId: task?.businessId || null, metadata: { taskId: button.dataset.finalTaskId, reviewNote: note } });
+    const finalReport = reports.find((item) => item.id === button.dataset.finalReportId);
+    if (finalReport?.userId) {
+      notifySafe({
+        type: button.dataset.finalAction === "approved" ? NOTIFICATION_TYPES.reportApproved : NOTIFICATION_TYPES.revisionRequested,
+        title: button.dataset.finalAction === "approved" ? "Laporan akhir disetujui" : "Laporan akhir perlu revisi",
+        body: note || task?.title || "",
+        organizationId: finalReport.organizationId || task?.organizationId,
+        businessId: finalReport.businessId || task?.businessId,
+        targetType: "taskReport",
+        targetId: finalReport.id,
+        userIds: [finalReport.userId],
+      });
+    }
     await updateTask(button.dataset.finalTaskId, { status: button.dataset.finalAction === "approved" ? "approved" : "in-progress" });
     await loadTaskList(overlay, profile, canManage);
   }));

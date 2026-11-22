@@ -8,6 +8,7 @@ import {
   getDoc,
   getDocs,
   limit,
+  onSnapshot,
   query,
   serverTimestamp,
   setDoc,
@@ -29,6 +30,7 @@ export const COLLECTIONS = Object.freeze({
   TASK_REPORTS: "taskReports",
   ATTENDANCE: "attendance",
   AUDIT_LOGS: "auditLogs",
+  NOTIFICATIONS: "notifications",
 });
 
 export async function getUserProfile(uid) {
@@ -359,6 +361,32 @@ export async function listAuditLogs(organizationId, { businessId, max = 100 } = 
   constraints.push(limit(max));
   const result = await getDocs(query(collection(db, COLLECTIONS.AUDIT_LOGS), ...constraints));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function listNotifications(userId, max = 50) {
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.NOTIFICATIONS),
+    where("userId", "==", userId),
+    limit(max),
+  ));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export function watchNotifications(userId, callback) {
+  return onSnapshot(
+    query(collection(db, COLLECTIONS.NOTIFICATIONS), where("userId", "==", userId)),
+    (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+  );
+}
+
+export async function markNotificationRead(notificationId) {
+  await updateDoc(doc(db, COLLECTIONS.NOTIFICATIONS, notificationId), { read: true, readAt: serverTimestamp() });
+}
+
+export async function markAllNotificationsRead(notifications) {
+  const batch = writeBatch(db);
+  notifications.filter((item) => !item.read).forEach((item) => batch.update(doc(db, COLLECTIONS.NOTIFICATIONS, item.id), { read: true, readAt: serverTimestamp() }));
+  await batch.commit();
 }
 
 export async function createOperationalRequest(request) {

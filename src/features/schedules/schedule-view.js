@@ -1,6 +1,7 @@
 import { getBusiness, listBusinessesForOrganization } from "../../lib/firestore/repositories.js";
 import { addShift, listShifts } from "./schedule-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
+import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 
 export async function openScheduleManager({ profile, onClose }) {
   const organizationId = profile.organizationId;
@@ -57,6 +58,7 @@ export async function openScheduleManager({ profile, onClose }) {
       if (!businessId) throw new Error("Pilih bisnis terlebih dahulu.");
       const shift = await addShift({ ...data, organizationId, businessId });
       logAuditSafe({ profile, action: "shift_created", targetType: "shift", targetId: shift?.id || null, businessId, metadata: { name: data.name, startTime: data.startTime, endTime: data.endTime } });
+      notifySafe({ type: NOTIFICATION_TYPES.scheduleAssigned, title: "Jadwal/shift baru", body: `${data.name} · ${data.startTime}–${data.endTime}`, organizationId, businessId, targetType: "shift", targetId: shift?.id || null, audience: "owner" });
       form.reset();
       form.querySelector("#shift-start").value = "08:00";
       form.querySelector("#shift-end").value = "17:00";

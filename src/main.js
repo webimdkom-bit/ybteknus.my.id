@@ -17,6 +17,8 @@ import { openRequestManager } from "./features/requests/request-view.js";
 import { openTaskManager } from "./features/tasks/task-view.js";
 import { openAuditViewer } from "./features/audit-trail/audit-view.js";
 import { openReportViewer } from "./features/reports/report-view.js";
+import { initNotificationBadges } from "./features/notifications/notification-view.js";
+import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
 import { getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules } from "./lib/firestore/repositories.js";
@@ -164,6 +166,7 @@ function renderOwnerDashboard(profile) {
 
   renderDashboardIcons();
   wireBusinessSwitcher(profile, () => refreshDashboard(profile));
+  initNotificationBadges(profile);
   refreshDashboard(profile);
 
   document.querySelector("[data-sidebar-open]").addEventListener("click", () => document.querySelector("#sidebar").classList.add("open"));
@@ -235,6 +238,7 @@ function renderAdminDashboard(profile) {
   renderDashboardIcons();
   wireDashboardChrome();
   wireBusinessSwitcher(profile, () => refreshDashboard(profile));
+  initNotificationBadges(profile);
   refreshDashboard(profile);
   document.querySelectorAll("[data-open-schedules]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openScheduleManager({ profile }); }));
   document.querySelector("[data-open-employees]")?.addEventListener("click", (event) => {
@@ -274,6 +278,7 @@ function renderEmployeeDashboard(profile) {
   `;
   renderDashboardIcons();
   wireDashboardChrome();
+  initNotificationBadges(profile);
   document.querySelectorAll("[data-open-attendance]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openAttendancePanel({ profile }); }));
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
@@ -399,6 +404,7 @@ async function refreshDashboard(profile) {
       ? await loadAdminDashboardData(profile)
       : await loadOwnerDashboardData(profile);
     applyDashboardData(viewModel);
+    syncDeadlineNotifications(profile);
   } catch (error) {
     console.warn("[dashboard] gagal memuat data:", error?.message || error);
     const activityList = document.querySelector("[data-activity-list]");
