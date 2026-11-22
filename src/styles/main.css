@@ -104,3 +104,36 @@ h1 em, .quick-panel em { color: #75931d; font-family: "Bebas Neue", sans-serif; 
 .notification-overlay { position: fixed; inset: 0; z-index: 46; background: rgba(24,34,37,.65); display: grid; place-items: center; padding: 20px; }.notification-modal { background: #f4f6f1; width: min(100%, 620px); max-height: 88vh; overflow: auto; padding: 30px; box-shadow: 0 20px 60px rgba(24,34,37,.25); }.notification-modal-head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #dfe4dc; padding-bottom: 20px; }.notification-modal-head h2 { font-size: 28px; letter-spacing: -.04em; margin-top: 9px; }.notification-modal-head p:last-child { color: #899392; font-size: 11px; margin-top: 7px; }.notification-head-actions { display: flex; gap: 8px; align-items: start; }.notification-head-actions .secondary-button { padding: 8px 10px; font-size: 9px; }.notification-close { color: #677473; font-size: 24px; }.notification-list { padding-top: 12px; }.notification-empty { color: #899392; font-size: 11px; }.notification-row { display: grid; grid-template-columns: 8px 1fr auto; gap: 12px; align-items: center; border-bottom: 1px solid #e9ede6; padding: 12px 0; }.notification-mark { width: 7px; height: 7px; border-radius: 50%; background: #8da82e; }.notification-row.is-read .notification-mark { background: #dfe4dc; }.notification-copy strong { display: block; font-size: 11px; color: #2b3a3d; }.notification-copy span { display: block; color: #667371; font-size: 9px; margin-top: 3px; }.notification-copy small { display: block; color: #91a13e; font-size: 8px; margin-top: 4px; }.notification-row button { padding: 6px 8px; font-size: 8px; }
 .schedule-layout { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(260px, .8fr); gap: 28px; }.schedule-column { display: grid; gap: 26px; align-content: start; }.assignment-form { border-top: 1px solid #e1e7df; padding-top: 22px; }.assignment-form h3 { font-size: 15px; margin-bottom: 12px; }
 .task-assignee-list { display: grid; gap: 6px; max-height: 128px; overflow: auto; border: 1px solid #dfe4dc; padding: 8px; }.task-assignee-list label { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #667371; }.task-assignee-list input { accent-color: #8da82e; }.task-category-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }.task-category-row .secondary-button { padding: 9px 10px; font-size: 9px; }
+@media (max-width: 720px) {
+  .topbar { position: sticky; top: 0; z-index: 18; }
+  .hero-row { position: sticky; top: 77px; z-index: 17; background: #f4f6f1; padding: 10px 0 12px; margin-bottom: 16px; }
+  .hero-row .eyebrow { font-size: 8px; }
+  .hero-row h1 { font-size: 32px; line-height: 1.05; margin-top: 4px; }
+  .hero-copy, .hero-row .primary-button { display: none; }
+  .schedule-overlay, .attendance-overlay, .business-overlay, .owner-overlay, .request-overlay, .task-overlay, .registration-overlay, .report-overlay, .audit-overlay, .notification-overlay { padding: 0; place-items: stretch; }
+  .schedule-modal, .attendance-modal, .business-modal, .owner-modal, .request-modal, .task-modal, .registration-modal, .report-modal, .audit-modal, .notification-modal { width: 100%; max-width: none; min-height: 100vh; max-height: none; padding: 22px 16px 40px; }
+  .schedule-modal-head, .attendance-modal-head, .business-modal-head, .owner-modal-head, .request-modal-head, .task-modal-head, .registration-modal-head, .report-modal-head, .audit-modal-head, .notification-modal-head { padding-bottom: 14px; }
+  .schedule-modal-head h2, .attendance-modal-head h2, .business-modal-head h2, .owner-modal-head h2, .request-modal-head h2, .task-modal-head h2, .registration-modal-head h2, .report-modal-head h2, .audit-modal-head h2, .notification-modal-head h2 { font-size: 22px; }
+  .schedule-layout, .schedule-column, .business-manager-grid, .owner-manager-grid, .request-layout, .task-layout, .employee-transfer-panel, .report-filters, .report-summary, .attendance-action-grid, .location-coordinate-grid, .task-form-grid, .employee-transfer-form, .admin-permission-grid, .task-category-row { grid-template-columns: 1fr !important; gap: 16px; }
+  .report-summary { grid-template-columns: repeat(2, 1fr) !important; }
+  .report-filter-actions { grid-column: 1 / -1; }
+  .report-actions button { flex: 1; }
+  .shift-row, .business-row, .managed-business-row, .managed-owner-row, .employee-management-row, .task-row-actions, .task-report-row, .task-final-report, .request-actions, .registration-actions, .notification-head-actions { flex-wrap: wrap; }
+  .shift-row b, .task-row-actions button, .request-actions button, .registration-actions button, .notification-head-actions button { flex: 1 1 auto; white-space: normal; }
+  .task-row.is-child { margin-left: 6px; }
+  .task-children, .subtask-form { margin-left: 0; }
+  .audit-header { display: none; }
+  .audit-row { grid-template-columns: 1fr; gap: 6px; }
+  .notification-row { grid-template-columns: 8px 1fr; }
+  .notification-row > button { grid-column: 2; }
+  .metric-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .metric-value { font-size: 40px; }
+  .chart-wrap { overflow: hidden; }
+  .attendance-action-grid button, .shift-form .primary-button { width: 100%; }
+}
+@media (max-width: 430px) {
+  .hero-row h1 { font-size: 27px; }
+  .report-summary { grid-template-columns: 1fr 1fr !important; }
+  .metric-value { font-size: 34px; }
+  .report-modal, .task-modal, .audit-modal { padding-left: 13px; padding-right: 13px; }
+}

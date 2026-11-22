@@ -21,7 +21,7 @@ import { initNotificationBadges } from "./features/notifications/notification-vi
 import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
-import { createOrganization, getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules } from "./lib/firestore/repositories.js";
+import { createOrganization, getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, updateUserProfile } from "./lib/firestore/repositories.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck } from "lucide";
 
 const app = document.querySelector("#app");
@@ -71,12 +71,12 @@ function renderOwnerDashboard(profile) {
       <nav class="main-nav" aria-label="Navigasi utama">
         <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
         <a class="nav-item" href="#businesses" data-open-businesses><i data-lucide="building-2"></i><span>Bisnis</span><b>02</b></a>
-       <a class="nav-item" href="#people" data-open-registrations><i data-lucide="users"></i><span>People</span><b>03</b></a>
+       <a class="nav-item" href="#people" data-open-registrations><i data-lucide="users"></i><span>Registrasi</span><b>03</b></a>
         ${profile?.role === "owner" ? '<a class="nav-item" href="#owners" data-open-owners><i data-lucide="users"></i><span>Owners</span><b>04</b></a>' : ""}
         ${profile?.role === "owner" ? '<a class="nav-item" href="#admins" data-open-admins><i data-lucide="user-cog"></i><span>Admins</span><b>05</b></a>' : ""}
        <a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>${profile?.role === "owner" ? "06" : "04"}</b></a>
-       <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
-       <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
+       <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi GPS</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
+       <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal & shift</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
        <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>${profile?.role === "owner" ? "08" : "06"}</b></a>
         <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
         <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>10</b></a>
@@ -84,7 +84,7 @@ function renderOwnerDashboard(profile) {
       </nav>
 
       <div class="sidebar-bottom">
-        <a class="nav-item" href="#settings" data-open-location><i data-lucide="settings-2"></i><span>Lokasi bisnis</span></a>
+        <a class="nav-item" href="#settings" data-open-location><i data-lucide="settings-2"></i><span>Lokasi & radius</span></a>
         <div class="profile-mini">
           <div class="avatar">${initials(profile?.displayName)}</div>
           <div><strong>${profile?.displayName || "User"}</strong><span>${roleLabel} · YB Tech</span></div>
@@ -229,9 +229,9 @@ function renderAdminDashboard(profile) {
         <div class="workspace-select"><span>WORKSPACE ADMIN</span><button class="business-switcher" type="button" data-business-switcher><span><i data-lucide="building-2"></i> <b data-business-switcher-label>Bisnis ditugaskan</b></span><i data-lucide="chevron-down"></i></button><div class="business-switcher-menu" data-business-switcher-menu hidden></div></div>
         <nav class="main-nav" aria-label="Navigasi admin">
           <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
-          <a class="nav-item" href="#people" data-open-employees><i data-lucide="users"></i><span>People</span><b>02</b></a>
+          <a class="nav-item" href="#people" data-open-employees><i data-lucide="users"></i><span>Karyawan</span><b>02</b></a>
           <a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>03</b></a>
-          <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal</span><b>04</b></a>
+          <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal & shift</span><b>04</b></a>
           <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>05</b></a>
           <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>06</b></a>
           <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>07</b></a>
@@ -497,6 +497,18 @@ subscribeToAuth(async (user) => {
     if (profile.status === "inactive" || profile.status === "suspended") {
       renderInactiveState();
       return;
+    }
+    if (profile.role === "admin") {
+      try {
+        const memberships = await listMembershipsForUser(profile.uid, profile.organizationId);
+        const businessIds = [...new Set(memberships.filter((item) => item.status !== "inactive").map((item) => item.businessId))];
+        const permissions = [...new Set(memberships.flatMap((item) => item.permissions || []))];
+        const stale = JSON.stringify(businessIds) !== JSON.stringify(profile.businessIds || [])
+          || JSON.stringify(permissions) !== JSON.stringify(profile.permissions || []);
+        if (stale) await updateUserProfile(profile.uid, { businessIds, permissions });
+        profile.businessIds = businessIds;
+        profile.permissions = permissions;
+      } catch (syncError) { console.warn("[auth] admin access sync:", syncError?.message || syncError); }
     }
     if (profile.status !== "active") {
       renderPendingState(profile);

@@ -15,7 +15,7 @@ export async function openEmployeeManager({ profile }) {
     const businesses = (await Promise.all((profile.businessIds || []).map((businessId) => getBusiness(businessId)))).filter(Boolean);
     const groups = await Promise.all(businesses.map(async (business) => ({ business, employees: await listEmployeesForBusiness(profile.organizationId, business.id) })));
     const employees = groups.flatMap(({ business, employees: items }) => items.map((employee) => ({ employee, business })));
-    list.innerHTML = employees.length ? employees.map(({ employee, business }) => employeeRow(employee, business)).join("") : `<div class="registration-empty-state"><strong>Belum ada employee.</strong><span>Employee pada bisnis Anda akan tampil di sini.</span></div>`;
+    list.innerHTML = employees.length ? employees.map(({ employee, business }) => employeeRow(employee, business)).join("") : `<div class="registration-empty-state"><strong>Belum ada karyawan.</strong><span>Karyawan akan muncul setelah registrasi disetujui Owner dan bisnisnya ditugaskan kepada Anda.</span></div>`;
     list.querySelectorAll("[data-toggle-employee]").forEach((button) => button.addEventListener("click", async () => {
       button.disabled = true;
       try {

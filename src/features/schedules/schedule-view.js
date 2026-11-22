@@ -25,6 +25,7 @@ export async function openScheduleManager({ profile, onClose }) {
           </form>
           <form class="shift-form assignment-form" id="assignment-form">
             <h3>Tetapkan jadwal karyawan</h3>
+            <p class="field-hint">Jadwal yang ditetapkan langsung dipakai karyawan untuk check-in/check-out pada tanggal tersebut.</p>
             <div class="field"><label for="assign-employee">Karyawan</label><select id="assign-employee" required><option value="">Memuat karyawan...</option></select></div>
             <div class="field"><label for="assign-shift">Shift</label><select id="assign-shift" required><option value="">Pilih shift</option></select></div>
             <div class="schedule-fields"><div class="field"><label for="assign-date">Tanggal jadwal</label><input id="assign-date" type="date" required /></div><div class="field"><label for="assign-effective">Tanggal efektif</label><input id="assign-effective" type="date" required /></div></div>
