@@ -1,4 +1,4 @@
-import { getApp, getApps, initializeApp } from "firebase-admin/app";
+import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
 
 export function getAdminApp() {
   if (getApps().length) return getApp();
@@ -7,7 +7,7 @@ export function getAdminApp() {
     : undefined;
   return initializeApp(
     serviceAccount
-      ? { credential: serviceAccount }
+      ? { credential: cert(serviceAccount) }
       : { projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID },
   );
 }

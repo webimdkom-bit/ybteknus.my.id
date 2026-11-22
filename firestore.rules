@@ -1,0 +1,279 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isOwner() {
+      return signedIn() && currentUser().role == 'owner';
+    }
+
+    function isAdmin() {
+      return signedIn() && currentUser().role == 'admin';
+    }
+
+    function sameOrganization(organizationId) {
+      return signedIn() && currentUser().organizationId == organizationId;
+    }
+
+    function assignedToBusiness(businessId) {
+      return isOwner() || (
+        isAdmin() && currentUser().businessIds.hasAny([businessId])
+      );
+    }
+
+    function memberOfBusiness(businessId) {
+      return signedIn() && currentUser().businessIds.hasAny([businessId]);
+    }
+
+    function adminHasPermission(businessId, permission) {
+      return isAdmin()
+        && memberOfBusiness(businessId)
+        && exists(/databases/$(database)/documents/memberships/$(request.auth.uid + '_' + businessId))
+        && get(/databases/$(database)/documents/memberships/$(request.auth.uid + '_' + businessId)).data.permissions.hasAny([permission]);
+    }
+
+    function canManageBusiness(organizationId, businessId) {
+      return sameOrganization(organizationId) && assignedToBusiness(businessId);
+    }
+
+    function canReviewRequest(businessId, requestType) {
+      return isOwner() || (
+        requestType == 'attendance-correction'
+          ? adminHasPermission(businessId, 'approveCorrections')
+          : requestType == 'overtime'
+            ? adminHasPermission(businessId, 'manageOvertime')
+            : adminHasPermission(businessId, 'approveLeave')
+      );
+    }
+
+    function ownUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow create: if (
+          ownUser(userId)
+          && request.resource.data.role == 'employee'
+          && request.resource.data.status == 'pending'
+          && request.resource.data.organizationId is string
+        ) || (
+          isOwner()
+          && (request.resource.data.role == 'owner' || request.resource.data.role == 'admin')
+          && request.resource.data.status == 'active'
+          && request.resource.data.organizationId == currentUser().organizationId
+        );
+      allow read: if ownUser(userId)
+        || (isOwner() && resource.data.organizationId == currentUser().organizationId)
+        || (isAdmin()
+          && resource.data.organizationId == currentUser().organizationId
+          && resource.data.businessIds.hasAny(currentUser().businessIds)
+          && (adminHasPermission(resource.data.businessIds[0], 'manageEmployees')
+            || adminHasPermission(resource.data.businessIds[0], 'manageTasks')));
+      allow update: if (
+          ownUser(userId)
+          && request.resource.data.organizationId == resource.data.organizationId
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.status == resource.data.status
+        ) || (
+          isOwner()
+          && resource.data.organizationId == currentUser().organizationId
+          && request.resource.data.organizationId == resource.data.organizationId
+        ) || (
+          isAdmin()
+          && resource.data.organizationId == currentUser().organizationId
+          && resource.data.businessIds.hasAny(currentUser().businessIds)
+          && adminHasPermission(resource.data.businessIds[0], 'manageEmployees')
+          && request.resource.data.organizationId == resource.data.organizationId
+        );
+      allow delete: if isOwner()
+        && resource.data.organizationId == currentUser().organizationId;
+    }
+
+    match /organizations/{organizationId} {
+      allow read: if sameOrganization(organizationId)
+        || (isOwner() && resource.data.ownerId == request.auth.uid);
+      allow create: if isOwner() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isOwner()
+        && sameOrganization(organizationId)
+        && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /businesses/{businessId} {
+      allow read: if (
+          resource.data.status == 'active'
+          && resource.data.acceptingRegistrations == true
+        ) || canManageBusiness(resource.data.organizationId, businessId)
+        || (sameOrganization(resource.data.organizationId) && memberOfBusiness(businessId));
+      allow create: if isOwner()
+        && sameOrganization(request.resource.data.organizationId);
+      allow update: if isOwner()
+        && sameOrganization(resource.data.organizationId)
+        && sameOrganization(request.resource.data.organizationId);
+      allow delete: if isOwner() && sameOrganization(resource.data.organizationId);
+    }
+
+    match /shifts/{shiftId} {
+      allow read: if canManageBusiness(resource.data.organizationId, resource.data.businessId)
+        || (sameOrganization(resource.data.organizationId) && memberOfBusiness(resource.data.businessId));
+      allow create, update: if isOwner()
+        || (adminHasPermission(request.resource.data.businessId, 'manageSchedules')
+          && sameOrganization(request.resource.data.organizationId));
+      allow delete: if isOwner()
+        || (adminHasPermission(resource.data.businessId, 'manageSchedules')
+          && sameOrganization(resource.data.organizationId));
+    }
+
+    match /schedules/{scheduleId} {
+      allow read: if ownUser(resource.data.userId)
+        || canManageBusiness(resource.data.organizationId, resource.data.businessId);
+      allow create, update: if isOwner()
+        || (adminHasPermission(request.resource.data.businessId, 'manageSchedules')
+          && sameOrganization(request.resource.data.organizationId));
+      allow delete: if isOwner()
+        || (adminHasPermission(resource.data.businessId, 'manageSchedules')
+          && sameOrganization(resource.data.organizationId));
+    }
+
+    match /memberships/{membershipId} {
+      allow read: if signedIn()
+        && (ownUser(resource.data.userId)
+          || (isOwner() && resource.data.organizationId == currentUser().organizationId));
+      allow create, update: if isOwner()
+        && sameOrganization(request.resource.data.organizationId);
+      allow delete: if isOwner()
+        && sameOrganization(resource.data.organizationId);
+    }
+
+    match /registrations/{registrationId} {
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow read: if ownUser(resource.data.userId)
+        || canManageBusiness(resource.data.organizationId, resource.data.businessId)
+        || adminHasPermission(resource.data.businessId, 'manageEmployees');
+      allow update: if isOwner()
+        && sameOrganization(resource.data.organizationId);
+      allow delete: if false;
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if signedIn()
+        && (ownUser(resource.data.userId)
+          || canManageBusiness(resource.data.organizationId, resource.data.businessId)
+          || adminHasPermission(resource.data.businessId, 'viewAttendance'));
+      allow create: if signedIn()
+        && ownUser(request.resource.data.userId)
+        && sameOrganization(request.resource.data.organizationId)
+        && currentUser().businessIds.hasAny([request.resource.data.businessId]);
+      allow update: if isOwner()
+        && sameOrganization(resource.data.organizationId)
+        || (adminHasPermission(resource.data.businessId, 'approveCorrections')
+          && sameOrganization(resource.data.organizationId));
+      allow delete: if false;
+    }
+
+    match /attendanceCorrections/{correctionId} {
+      allow read: if ownUser(resource.data.userId)
+        || isOwner() && resource.data.organizationId == currentUser().organizationId
+        || adminHasPermission(resource.data.businessId, 'approveCorrections');
+      allow create: if isOwner()
+        || adminHasPermission(request.resource.data.businessId, 'approveCorrections');
+      allow update, delete: if false;
+    }
+
+    match /overtime/{overtimeId} {
+      allow read: if ownUser(resource.data.userId)
+        || isOwner() && resource.data.organizationId == currentUser().organizationId
+        || adminHasPermission(resource.data.businessId, 'manageOvertime');
+      allow create: if ownUser(request.resource.data.userId)
+        && sameOrganization(request.resource.data.organizationId)
+        && memberOfBusiness(request.resource.data.businessId);
+      allow update: if isOwner()
+        || adminHasPermission(resource.data.businessId, 'manageOvertime');
+      allow delete: if false;
+    }
+
+    match /requests/{requestId} {
+      allow create: if ownUser(request.resource.data.userId)
+        && sameOrganization(request.resource.data.organizationId)
+        && memberOfBusiness(request.resource.data.businessId)
+        && request.resource.data.status == 'pending';
+      allow read: if ownUser(resource.data.userId)
+        || (canReviewRequest(resource.data.businessId, resource.data.type)
+          && sameOrganization(resource.data.organizationId));
+      allow update: if canReviewRequest(resource.data.businessId, resource.data.type)
+        && sameOrganization(resource.data.organizationId)
+        && request.resource.data.organizationId == resource.data.organizationId;
+      allow delete: if false;
+    }
+
+    match /tasks/{taskId} {
+      allow read: if ownUser(request.auth.uid)
+        && resource.data.assignedTo.hasAny([request.auth.uid])
+        || canManageBusiness(resource.data.organizationId, resource.data.businessId)
+        || adminHasPermission(resource.data.businessId, 'viewReports');
+      allow create: if isOwner()
+        || (adminHasPermission(request.resource.data.businessId, 'manageTasks')
+          && sameOrganization(request.resource.data.organizationId));
+      allow update: if isOwner()
+        || (adminHasPermission(resource.data.businessId, 'manageTasks')
+          && sameOrganization(resource.data.organizationId))
+        || (resource.data.assignedTo.hasAny([request.auth.uid])
+          && ownUser(request.auth.uid));
+      allow delete: if isOwner();
+    }
+
+    match /taskReports/{reportId} {
+      allow read: if ownUser(resource.data.userId)
+        || canManageBusiness(resource.data.organizationId, resource.data.businessId)
+        || adminHasPermission(resource.data.businessId, 'reviewSubmissions');
+      allow create: if ownUser(request.resource.data.userId)
+        && sameOrganization(request.resource.data.organizationId)
+        && get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedTo.hasAny([request.auth.uid]);
+      allow update: if isOwner()
+        || adminHasPermission(resource.data.businessId, 'reviewSubmissions')
+        || (ownUser(resource.data.userId) && resource.data.status == 'revision');
+      allow delete: if false;
+    }
+
+    match /auditLogs/{auditId} {
+      allow read: if isOwner() && resource.data.organizationId == currentUser().organizationId
+        || (isAdmin() && resource.data.businessId in currentUser().businessIds);
+      allow create, update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if ownUser(resource.data.userId);
+      allow update: if ownUser(resource.data.userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+      allow create, delete: if false;
+    }
+
+    match /files/{fileId} {
+      allow read: if ownUser(resource.data.uploadedBy)
+        || isOwner() && resource.data.organizationId == currentUser().organizationId
+        || (isAdmin() && resource.data.businessId in currentUser().businessIds);
+      allow create: if signedIn()
+        && ownUser(request.resource.data.uploadedBy)
+        && sameOrganization(request.resource.data.organizationId);
+      allow update, delete: if false;
+    }
+
+    match /taskCategories/{categoryId} {
+      allow read: if signedIn() && sameOrganization(resource.data.organizationId);
+      allow create, update: if isOwner() && sameOrganization(request.resource.data.organizationId);
+      allow delete: if isOwner() && sameOrganization(resource.data.organizationId);
+    }
+
+    match /{collection}/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+  }
+}

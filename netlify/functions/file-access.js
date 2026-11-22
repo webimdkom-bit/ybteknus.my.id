@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { v2 as cloudinary } from "cloudinary";
 import { getAdminApp } from "./_shared/admin";
+import { canAccessFile } from "./_shared/access";
 import { verifyFirebaseToken } from "./_shared/auth";
 
 function json(statusCode, payload) {
@@ -24,10 +25,7 @@ export const handler = async (event) => {
   const actorSnapshot = await db.collection("users").doc(uid).get();
   const actor = actorSnapshot.exists ? actorSnapshot.data() : null;
   if (!actor) return json(403, { error: "Profil pengguna tidak ditemukan." });
-  const allowed = actor.role === "owner"
-    || file.uploadedBy === uid
-    || (actor.role === "admin" && actor.businessIds?.includes(file.businessId));
-  if (!allowed) return json(403, { error: "Tidak memiliki izin mengakses file." });
+  if (!canAccessFile({ ...actor, uid }, file)) return json(403, { error: "Tidak memiliki izin mengakses file." });
 
   cloudinary.v2.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -37,6 +35,6 @@ export const handler = async (event) => {
 
   if (file.access !== "private") return json(200, { url: file.secureUrl, access: "public" });
   const expiresAt = Math.floor(Date.now() / 1000) + 600;
-  const url = await cloudinary.v2.utils.private_download_url(file.cloudinaryPublicId, file.format || "", { expiresAt });
+  const url = await cloudinary.v2.utils.private_download_url(file.cloudinaryPublicId, file.format || "", { expires_at: expiresAt });
   return json(200, { url, access: "private", expiresAt });
 };

@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { v2 as cloudinary } from "cloudinary";
 import { getAdminApp } from "./_shared/admin";
+import { canAccessFile } from "./_shared/access";
 import { verifyFirebaseToken } from "./_shared/auth";
 
 function json(statusCode, payload) {
@@ -32,10 +33,7 @@ export const handler = async (event) => {
   const actorSnapshot = await db.collection("users").doc(uid).get();
   const actor = actorSnapshot.exists ? actorSnapshot.data() : null;
   if (!actor) return json(403, { error: "Profil pengguna tidak ditemukan." });
-  const allowed = actor.role === "owner"
-    || file.uploadedBy === uid
-    || (actor.role === "admin" && actor.businessIds?.includes(file.businessId));
-  if (!allowed) return json(403, { error: "Tidak memiliki izin menghapus file." });
+  if (!canAccessFile({ ...actor, uid }, file)) return json(403, { error: "Tidak memiliki izin menghapus file." });
 
   configureCloudinary();
   const result = await cloudinary.v2.uploader.destroy(file.cloudinaryPublicId);
