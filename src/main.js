@@ -15,6 +15,7 @@ import { openAdminManager } from "./features/admins/admin-view.js";
 import { openEmployeeManager } from "./features/employees/employee-view.js";
 import { openRequestManager } from "./features/requests/request-view.js";
 import { openTaskManager } from "./features/tasks/task-view.js";
+import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
 import { getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules } from "./lib/firestore/repositories.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut } from "lucide";
 
@@ -89,7 +90,7 @@ function renderOwnerDashboard(profile) {
         <button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button>
         <div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>Overview</strong></div>
         <div class="topbar-actions">
-          <button class="date-filter"><i data-lucide="calendar-days"></i><span>21 Nov 2026</span><i data-lucide="chevron-down"></i></button>
+          <button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>Memuat tanggal...</span><i data-lucide="chevron-down"></i></button>
           <button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button>
           <div class="avatar avatar-top">${initials(profile?.displayName)}</div>
         </div>
@@ -98,7 +99,7 @@ function renderOwnerDashboard(profile) {
       <main class="dashboard" id="overview">
         <section class="hero-row">
           <div>
-            <p class="eyebrow">SATURDAY · 21 NOVEMBER 2026</p>
+            <p class="eyebrow" data-dashboard-eyebrow>Memuat tanggal...</p>
             <h1>Good morning,<br><em>${firstName}.</em></h1>
             <p class="hero-copy" data-dashboard-scope>${roleView.subtitle}</p>
           </div>
@@ -108,23 +109,23 @@ function renderOwnerDashboard(profile) {
         <section class="metric-grid" aria-label="Ringkasan metrik">
           <article class="metric-card metric-dark">
             <div class="metric-head"><span>KEHADIRAN HARI INI</span><i data-lucide="clock-3"></i></div>
-            <div class="metric-value">92<span>%</span></div>
-            <div class="metric-foot"><span class="trend positive"><i data-lucide="arrow-up-right"></i> 4.8%</span><span>vs kemarin</span></div>
+            <div class="metric-value" data-metric-attendance>—</div>
+            <div class="metric-foot"><span class="trend positive" data-metric-attendance-foot><i data-lucide="arrow-up-right"></i> 0 orang hadir</span><span>data hari ini</span></div>
           </article>
           <article class="metric-card">
             <div class="metric-head"><span>${roleView.people}</span><i data-lucide="users"></i></div>
-            <div class="metric-value">${roleView.peopleValue}</div>
-            <div class="metric-foot"><span class="trend neutral">${roleView.peopleFoot}</span><span>${profile?.role === "employee" ? "penugasan" : "total anggota"}</span></div>
+            <div class="metric-value" data-metric-people>—</div>
+            <div class="metric-foot"><span class="trend neutral" data-metric-people-foot>${roleView.peopleFoot}</span><span>${profile?.role === "employee" ? "penugasan" : "total anggota"}</span></div>
           </article>
           <article class="metric-card metric-lime">
             <div class="metric-head"><span>TUGAS BERJALAN</span><i data-lucide="clipboard-check"></i></div>
-            <div class="metric-value">31</div>
-            <div class="metric-foot"><span class="trend dark-trend"><i data-lucide="arrow-down-right"></i> 2</span><span>sejak kemarin</span></div>
+            <div class="metric-value" data-metric-tasks>—</div>
+            <div class="metric-foot"><span class="trend dark-trend" data-metric-tasks-foot><i data-lucide="arrow-down-right"></i> 0 tugas</span><span>sedang berjalan</span></div>
           </article>
           <article class="metric-card">
             <div class="metric-head"><span>MENUNGGU REVIEW</span><i data-lucide="alert-circle"></i></div>
-            <div class="metric-value">07</div>
-            <div class="metric-foot"><span class="trend warning">Perlu aksi</span><span>laporan masuk</span></div>
+            <div class="metric-value" data-metric-reviews>—</div>
+            <div class="metric-foot"><span class="trend warning" data-metric-reviews-foot>Perlu aksi</span><span>laporan masuk</span></div>
           </article>
         </section>
 
@@ -133,32 +134,23 @@ function renderOwnerDashboard(profile) {
             <div class="panel-heading"><div><h2>Attendance pulse</h2><p>Performa kehadiran lintas bisnis</p></div><button class="text-button">Lihat laporan <i data-lucide="arrow-up-right"></i></button></div>
             <div class="chart-wrap">
               <div class="chart-y"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0</span></div>
-              <div class="chart-area"><div class="chart-grid-lines"><i></i><i></i><i></i><i></i><i></i></div><svg class="attendance-chart" viewBox="0 0 640 210" preserveAspectRatio="none" aria-label="Grafik kehadiran mingguan"><path class="chart-fill" d="M0 136 C40 122 48 126 82 104 S132 124 164 88 S216 105 246 76 S300 83 330 54 S380 69 414 48 S466 75 496 42 S548 54 578 31 S620 35 640 18 L640 210 L0 210Z"></path><path class="chart-line" d="M0 136 C40 122 48 126 82 104 S132 124 164 88 S216 105 246 76 S300 83 330 54 S380 69 414 48 S466 75 496 42 S548 54 578 31 S620 35 640 18"></path><circle cx="578" cy="31" r="5"></circle></svg><div class="chart-x"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span></div></div>
+              <div class="chart-area"><div class="chart-grid-lines"><i></i><i></i><i></i><i></i><i></i></div><svg class="attendance-chart" viewBox="0 0 640 210" preserveAspectRatio="none" aria-label="Grafik kehadiran mingguan"><path class="chart-fill" data-chart-fill d="M0 210 L640 210 L0 210Z"></path><path class="chart-line" data-chart-line d="M0 210 L640 210"></path><circle cx="578" cy="31" r="5"></circle></svg><div class="chart-x"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span></div></div>
             </div>
-            <div class="chart-legend"><span><i class="legend-dot lime"></i>Hadir</span><span><i class="legend-dot navy"></i>Target 90%</span><strong>92% <small>rata-rata</small></strong></div>
+            <div class="chart-legend"><span><i class="legend-dot lime"></i>Hadir</span><span><i class="legend-dot navy"></i>Target 90%</span><strong data-chart-legend>— <small>rata-rata 7 hari</small></strong></div>
           </article>
 
           <article class="panel business-panel">
             <div class="panel-heading"><div><h2>Business health</h2><p>Ringkasan hari ini</p></div><button class="icon-button"><i data-lucide="more-horizontal"></i></button></div>
-            <div class="business-list">
-              <div class="business-row"><div class="business-icon orange">K</div><div class="business-info"><strong>Kopi Koma</strong><span><i data-lucide="map-pin"></i> Bandung · 14 people</span></div><div class="health-score"><b>96%</b><span>Excellent</span></div></div>
-              <div class="business-row"><div class="business-icon blue">N</div><div class="business-info"><strong>Nusa Studio</strong><span><i data-lucide="map-pin"></i> Jakarta · 18 people</span></div><div class="health-score"><b>91%</b><span>On track</span></div></div>
-              <div class="business-row"><div class="business-icon green">S</div><div class="business-info"><strong>Sora Goods</strong><span><i data-lucide="map-pin"></i> Surabaya · 09 people</span></div><div class="health-score"><b>88%</b><span>On track</span></div></div>
-              <div class="business-row"><div class="business-icon purple">A</div><div class="business-info"><strong>Atelier 27</strong><span><i data-lucide="map-pin"></i> Bali · 07 people</span></div><div class="health-score"><b>74%</b><span class="health-alert">Needs care</span></div></div>
-            </div>
+            <div class="business-list" data-business-list><div class="role-empty-state"><strong>Memuat bisnis...</strong><span>Ringkasan performa akan muncul di sini.</span></div></div>
           </article>
         </section>
 
         <section class="bottom-grid">
           <article class="panel activity-panel">
             <div class="panel-heading"><div><h2>Recent activity</h2><p>Aktivitas terbaru dari semua bisnis</p></div><button class="filter-button">Semua aktivitas <i data-lucide="chevron-down"></i></button></div>
-            <div class="activity-table"><div class="activity-header"><span>AKTIVITAS</span><span>OLEH</span><span>WAKTU</span><span>STATUS</span></div>
-              <div class="activity-row"><div class="activity-event"><span class="event-icon check"><i data-lucide="check"></i></span><div><strong>Laporan tugas disetujui</strong><span>Inventory check · Kopi Koma</span></div></div><span class="person">Nadia Putri</span><span class="time">09:42</span><span class="status-pill done">Approved</span></div>
-              <div class="activity-row"><div class="activity-event"><span class="event-icon pending"><i data-lucide="circle-dashed"></i></span><div><strong>Pengajuan cuti baru</strong><span>24–26 Nov · Nusa Studio</span></div></div><span class="person">Fajar Ramadhan</span><span class="time">09:18</span><span class="status-pill review">Review</span></div>
-              <div class="activity-row"><div class="activity-event"><span class="event-icon task"><i data-lucide="clipboard-check"></i></span><div><strong>Tugas baru dibuat</strong><span>Merchandise restock · Sora Goods</span></div></div><span class="person">Raka Aditya</span><span class="time">08:56</span><span class="status-pill assigned">Assigned</span></div>
-            </div>
+            <div class="activity-table" data-activity-list><div class="role-empty-state"><strong>Memuat aktivitas...</strong><span>Aktivitas terbaru akan muncul di sini.</span></div></div>
           </article>
-          <aside class="quick-panel"><div class="quick-label">QUICK ACTIONS</div><h2>Keep the<br><em>momentum.</em></h2><p>Beberapa hal yang bisa Anda selesaikan sekarang.</p><button class="quick-action"><span class="quick-action-icon"><i data-lucide="users"></i></span><span><strong>Review registrations</strong><small>3 karyawan menunggu</small></span><i data-lucide="arrow-up-right"></i></button><button class="quick-action"><span class="quick-action-icon"><i data-lucide="file-bar-chart-2"></i></span><span><strong>Check pending reports</strong><small>7 laporan perlu review</small></span><i data-lucide="arrow-up-right"></i></button></aside>
+          <aside class="quick-panel"><div class="quick-label">QUICK ACTIONS</div><h2>Keep the<br><em>momentum.</em></h2><p>Beberapa hal yang bisa Anda selesaikan sekarang.</p><button class="quick-action" data-open-registrations><span class="quick-action-icon"><i data-lucide="users"></i></span><span><strong>Review registrations</strong><small data-quick-registrations>0 karyawan menunggu</small></span><i data-lucide="arrow-up-right"></i></button><button class="quick-action" data-open-tasks><span class="quick-action-icon"><i data-lucide="file-bar-chart-2"></i></span><span><strong>Check pending reports</strong><small data-quick-reports>0 laporan perlu review</small></span><i data-lucide="arrow-up-right"></i></button></aside>
         </section>
       </main>
     </div>
@@ -166,7 +158,8 @@ function renderOwnerDashboard(profile) {
   `;
 
   renderDashboardIcons();
-  wireBusinessSwitcher(profile);
+  wireBusinessSwitcher(profile, () => refreshDashboard(profile));
+  refreshDashboard(profile);
 
   document.querySelector("[data-sidebar-open]").addEventListener("click", () => document.querySelector("#sidebar").classList.add("open"));
   document.querySelector("[data-sidebar-close]").addEventListener("click", () => document.querySelector("#sidebar").classList.remove("open"));
@@ -179,10 +172,10 @@ function renderOwnerDashboard(profile) {
     event.preventDefault();
     if (profile.role === "owner") openBusinessManager({ profile });
   });
-  document.querySelector("[data-open-registrations]").addEventListener("click", (event) => {
+  document.querySelectorAll("[data-open-registrations]").forEach((button) => button.addEventListener("click", (event) => {
     event.preventDefault();
     if (profile.role === "owner") openRegistrationManager({ profile });
-  });
+  }));
   document.querySelector("[data-open-owners]")?.addEventListener("click", (event) => {
     event.preventDefault();
     if (profile.role === "owner") openOwnerManager({ profile });
@@ -191,8 +184,8 @@ function renderOwnerDashboard(profile) {
     event.preventDefault();
     if (profile.role === "owner") openAdminManager({ profile });
   });
-  document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
-  document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
+  document.querySelectorAll("[data-open-requests]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); }));
+  document.querySelectorAll("[data-open-tasks]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); }));
   document.querySelector("[data-open-attendance]").addEventListener("click", (event) => {
     event.preventDefault();
     if (profile.role === "employee") openAttendancePanel({ profile });
@@ -211,7 +204,7 @@ function renderAdminDashboard(profile) {
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
         <div class="brand-lockup"><div class="brand-mark">YB</div><div><strong>YB TECH</strong><span>OPERATIONS OS</span></div><button class="icon-button sidebar-close" data-sidebar-close aria-label="Tutup menu"><i data-lucide="x"></i></button></div>
-        <div class="workspace-select"><span>WORKSPACE ADMIN</span><button class="business-switcher" type="button"><span><i data-lucide="building-2"></i> Bisnis ditugaskan</span><i data-lucide="chevron-down"></i></button></div>
+        <div class="workspace-select"><span>WORKSPACE ADMIN</span><button class="business-switcher" type="button" data-business-switcher><span><i data-lucide="building-2"></i> <b data-business-switcher-label>Bisnis ditugaskan</b></span><i data-lucide="chevron-down"></i></button><div class="business-switcher-menu" data-business-switcher-menu hidden></div></div>
         <nav class="main-nav" aria-label="Navigasi admin">
           <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
           <a class="nav-item" href="#people" data-open-employees><i data-lucide="users"></i><span>People</span><b>02</b></a>
@@ -222,17 +215,19 @@ function renderAdminDashboard(profile) {
         </nav>
         <div class="sidebar-bottom"><div class="profile-mini"><div class="avatar">${initials(profile?.displayName)}</div><div><strong>${profile?.displayName || "User"}</strong><span>Admin · YB Tech</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
       </aside>
-      <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>Admin overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span>21 Nov 2026</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button><div class="avatar avatar-top">${initials(profile?.displayName)}</div></div></header>
+      <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>Admin overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>Memuat tanggal...</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button><div class="avatar avatar-top">${initials(profile?.displayName)}</div></div></header>
         <main class="dashboard role-dashboard admin-dashboard" id="overview">
           <section class="hero-row"><div><p class="eyebrow">ADMIN OPERATIONS</p><h1>Good morning,<br><em>${firstName}.</em></h1><p class="hero-copy">Pantau pekerjaan dan jadwal bisnis yang menjadi tanggung jawab Anda.</p></div><button class="primary-button" data-open-schedules><i data-lucide="calendar-days"></i> Kelola jadwal</button></section>
-          <section class="metric-grid" aria-label="Ringkasan admin"><article class="metric-card metric-dark"><div class="metric-head"><span>KEHADIRAN HARI INI</span><i data-lucide="clock-3"></i></div><div class="metric-value">—</div><div class="metric-foot"><span class="trend neutral">Bisnis Anda</span><span>menunggu data</span></div></article><article class="metric-card"><div class="metric-head"><span>PEOPLE DI BISNIS</span><i data-lucide="users"></i></div><div class="metric-value">—</div><div class="metric-foot"><span class="trend neutral">Terpantau</span><span>sesuai akses</span></div></article><article class="metric-card metric-lime"><div class="metric-head"><span>TUGAS BERJALAN</span><i data-lucide="clipboard-check"></i></div><div class="metric-value">—</div><div class="metric-foot"><span class="trend dark-trend">Operasional</span><span>hari ini</span></div></article><article class="metric-card"><div class="metric-head"><span>PERLU AKSI</span><i data-lucide="alert-circle"></i></div><div class="metric-value">—</div><div class="metric-foot"><span class="trend warning">Review</span><span>sesuai izin</span></div></article></section>
-          <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Ruang kerja Admin</h2><p>Data akan mengikuti bisnis dan permission yang diberikan Owner.</p></div></div><div class="role-empty-state"><strong>Siap bekerja.</strong><span>Gunakan menu Jadwal untuk mengelola shift pada bisnis yang ditugaskan.</span></div></article><aside class="quick-panel"><div class="quick-label">ADMIN SCOPE</div><h2>Focus on<br><em>execution.</em></h2><p>Anda hanya dapat bekerja pada bisnis yang menjadi tanggung jawab Anda.</p></aside></section>
+          <section class="metric-grid" aria-label="Ringkasan admin"><article class="metric-card metric-dark"><div class="metric-head"><span>KEHADIRAN HARI INI</span><i data-lucide="clock-3"></i></div><div class="metric-value" data-metric-attendance>—</div><div class="metric-foot"><span class="trend neutral" data-metric-attendance-foot>Bisnis Anda</span><span>data hari ini</span></div></article><article class="metric-card"><div class="metric-head"><span>PEOPLE DI BISNIS</span><i data-lucide="users"></i></div><div class="metric-value" data-metric-people>—</div><div class="metric-foot"><span class="trend neutral" data-metric-people-foot>Terpantau</span><span>sesuai akses</span></div></article><article class="metric-card metric-lime"><div class="metric-head"><span>TUGAS BERJALAN</span><i data-lucide="clipboard-check"></i></div><div class="metric-value" data-metric-tasks>—</div><div class="metric-foot"><span class="trend dark-trend" data-metric-tasks-foot>Operasional</span><span>hari ini</span></div></article><article class="metric-card"><div class="metric-head"><span>PERLU AKSI</span><i data-lucide="alert-circle"></i></div><div class="metric-value" data-metric-reviews>—</div><div class="metric-foot"><span class="trend warning" data-metric-reviews-foot>Review</span><span>sesuai izin</span></div></article></section>
+          <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Ruang kerja Admin</h2><p>Data mengikuti bisnis dan izin yang diberikan Owner.</p></div></div><div class="admin-dashboard-detail" data-admin-detail><div class="role-empty-state"><strong>Memuat data...</strong><span>Menyiapkan ringkasan bisnis yang ditugaskan.</span></div></div></article><aside class="quick-panel"><div class="quick-label">ADMIN SCOPE</div><h2>Focus on<br><em>execution.</em></h2><p>Anda hanya dapat bekerja pada bisnis yang menjadi tanggung jawab Anda.</p></aside></section>
         </main>
       </div>
     </div>
   `;
   renderDashboardIcons();
   wireDashboardChrome();
+  wireBusinessSwitcher(profile, () => refreshDashboard(profile));
+  refreshDashboard(profile);
   document.querySelectorAll("[data-open-schedules]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openScheduleManager({ profile }); }));
   document.querySelector("[data-open-employees]")?.addEventListener("click", (event) => {
     event.preventDefault();
@@ -330,6 +325,79 @@ function formatDateLabel(value) {
   return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+}
+
+function buildChartPaths(series) {
+  const step = 640 / Math.max(1, series.length - 1);
+  const points = series.map((item, index) => ({ x: Math.round(index * step), y: Math.round(210 - (Number(item.percent) || 0) * 1.9) }));
+  if (!points.length) return { line: "M0 210 L640 210", fill: "M0 210 L640 210 L0 210Z" };
+  const line = points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
+  const fill = `${line} L640 210 L0 210Z`;
+  return { line, fill };
+}
+
+function applyDashboardData(viewModel) {
+  const setText = (selector, value) => {
+    const element = document.querySelector(selector);
+    if (element) element.textContent = value;
+  };
+  const metrics = viewModel.metrics;
+  setText("[data-dashboard-date]", viewModel.generatedAt);
+  setText("[data-dashboard-eyebrow]", viewModel.generatedAt.toUpperCase());
+  setText("[data-metric-attendance]", `${metrics.attendancePercent}%`);
+  setText("[data-metric-attendance-foot]", `${metrics.attendanceHadir} orang hadir · ${metrics.late} terlambat · ${metrics.alpa} alpa`);
+  setText("[data-metric-people]", metrics.people);
+  setText("[data-metric-people-foot]", `${metrics.businesses} bisnis`);
+  setText("[data-metric-tasks]", metrics.runningTasks);
+  setText("[data-metric-tasks-foot]", `${metrics.overdueTasks} terlambat`);
+  setText("[data-metric-reviews]", metrics.pendingReviews);
+  setText("[data-metric-reviews-foot]", `${metrics.pendingRequests} pengajuan menunggu`);
+  setText("[data-quick-registrations]", `${metrics.pendingRegistrations} karyawan menunggu`);
+  setText("[data-quick-reports]", `${metrics.pendingReviews} laporan perlu review`);
+
+  const average = viewModel.chartSeries.length
+    ? Math.round(viewModel.chartSeries.reduce((total, item) => total + (Number(item.percent) || 0), 0) / viewModel.chartSeries.length)
+    : 0;
+  setText("[data-chart-legend]", `${average}% rata-rata 7 hari`);
+  const paths = buildChartPaths(viewModel.chartSeries);
+  const fill = document.querySelector("[data-chart-fill]");
+  const line = document.querySelector("[data-chart-line]");
+  if (fill) fill.setAttribute("d", paths.fill);
+  if (line) line.setAttribute("d", paths.line);
+
+  const statusClass = (status) => (["approved", "done"].includes(status) ? "done" : ["review", "pending"].includes(status) ? "review" : "assigned");
+  const businessColors = ["orange", "blue", "green", "purple"];
+  const healthRows = viewModel.businessHealth.map((business, index) => `<div class="business-row"><div class="business-icon ${businessColors[index % businessColors.length]}">${escapeHtml(business.name.charAt(0))}</div><div class="business-info"><strong>${escapeHtml(business.name)}</strong><span><i data-lucide="map-pin"></i> ${escapeHtml(business.city)} · ${business.people} people</span></div><div class="health-score"><b>${business.score}%</b><span class="${business.score < 75 ? "health-alert" : ""}">${escapeHtml(business.label)}</span></div></div>`).join("");
+  const activityRows = viewModel.activity.map((item) => `<div class="activity-row"><div class="activity-event"><span class="event-icon ${statusClass(item.status)}"><i data-lucide="check"></i></span><div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></div></div><span class="person">Sistem</span><span class="time">${escapeHtml(item.time)}</span><span class="status-pill ${statusClass(item.status)}">${escapeHtml(item.status)}</span></div>`).join("");
+
+  const businessList = document.querySelector("[data-business-list]");
+  if (businessList) businessList.innerHTML = healthRows || `<div class="role-empty-state"><strong>Belum ada bisnis aktif.</strong><span>Buat bisnis untuk melihat performa.</span></div>`;
+  const activityList = document.querySelector("[data-activity-list]");
+  if (activityList) activityList.innerHTML = activityRows
+    ? `<div class="activity-header"><span>AKTIVITAS</span><span>OLEH</span><span>WAKTU</span><span>STATUS</span></div>${activityRows}`
+    : `<div class="role-empty-state"><strong>Belum ada aktivitas.</strong><span>Aktivitas akan muncul setelah ada transaksi.</span></div>`;
+  const adminDetail = document.querySelector("[data-admin-detail]");
+  if (adminDetail) adminDetail.innerHTML = `<div class="role-empty-state"><strong>${metrics.businesses} bisnis terpantau.</strong><span>Hadir ${metrics.attendancePercent}%, ${metrics.runningTasks} tugas berjalan, ${metrics.pendingReviews} laporan perlu review.</span></div>${healthRows ? `<div class="business-list">${healthRows}</div>` : ""}`;
+  renderDashboardIcons();
+}
+
+async function refreshDashboard(profile) {
+  try {
+    const viewModel = profile.role === "admin"
+      ? await loadAdminDashboardData(profile)
+      : await loadOwnerDashboardData(profile);
+    applyDashboardData(viewModel);
+  } catch (error) {
+    console.warn("[dashboard] gagal memuat data:", error?.message || error);
+    const activityList = document.querySelector("[data-activity-list]");
+    if (activityList) activityList.innerHTML = `<div class="role-empty-state"><strong>Data belum tersedia.</strong><span>${escapeHtml(error?.message || "Coba muat ulang halaman.")}</span></div>`;
+    const adminDetail = document.querySelector("[data-admin-detail]");
+    if (adminDetail) adminDetail.innerHTML = `<div class="role-empty-state"><strong>Data belum tersedia.</strong><span>${escapeHtml(error?.message || "Coba muat ulang halaman.")}</span></div>`;
+  }
+}
+
 function renderUnknownRoleState(profile) {
   app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><p class="eyebrow">ROLE NOT CONFIGURED</p><h1>Access<br><em>pending.</em></h1><p>Role akun ${profile?.email || "ini"} belum dikonfigurasi. Hubungi Owner perusahaan.</p><button class="primary-button" data-sign-out>Kembali ke login</button></section></main>`;
   app.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
@@ -346,7 +414,7 @@ function renderDashboardIcons() {
   createIcons({ icons: { Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut } });
 }
 
-async function wireBusinessSwitcher(profile) {
+async function wireBusinessSwitcher(profile, onScopeChange) {
   const button = document.querySelector("[data-business-switcher]");
   const menu = document.querySelector("[data-business-switcher-menu]");
   const label = document.querySelector("[data-business-switcher-label]");
@@ -365,6 +433,7 @@ async function wireBusinessSwitcher(profile) {
       if (scopeCopy) scopeCopy.textContent = business ? `Ringkasan operasional ${business.name} dalam satu pandangan.` : "Semua yang perlu Anda tahu tentang seluruh operasional hari ini, dalam satu pandangan.";
       profile.selectedBusinessId = option.dataset.businessScope || null;
       menu.hidden = true;
+      if (typeof onScopeChange === "function") onScopeChange();
     }));
     document.addEventListener("click", (event) => { if (!menu.contains(event.target) && event.target !== button) menu.hidden = true; });
   } catch (error) {

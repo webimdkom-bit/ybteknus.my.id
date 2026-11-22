@@ -27,6 +27,7 @@ export const COLLECTIONS = Object.freeze({
   REQUESTS: "requests",
   TASKS: "tasks",
   TASK_REPORTS: "taskReports",
+  ATTENDANCE: "attendance",
 });
 
 export async function getUserProfile(uid) {
@@ -224,6 +225,16 @@ export async function listRegistrations(organizationId) {
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
+export async function listRegistrationsForBusiness(organizationId, businessId) {
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.REGISTRATIONS),
+    where("organizationId", "==", organizationId),
+    where("businessId", "==", businessId),
+    where("status", "==", "pending"),
+  ));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
 export async function approveEmployeeRegistration(registration) {
   const batch = writeBatch(db);
   const registrationRef = doc(db, COLLECTIONS.REGISTRATIONS, registration.id);
@@ -316,7 +327,7 @@ export async function listEmployeeSchedules(userId) {
 }
 
 export async function createAttendance(attendance) {
-  const reference = await addDoc(collection(db, "attendance"), {
+  const reference = await addDoc(collection(db, COLLECTIONS.ATTENDANCE), {
     ...attendance,
     createdAt: serverTimestamp(),
   });
@@ -325,9 +336,19 @@ export async function createAttendance(attendance) {
 
 export async function listAttendance(userId) {
   const result = await getDocs(query(
-    collection(db, "attendance"),
+    collection(db, COLLECTIONS.ATTENDANCE),
     where("userId", "==", userId),
   ));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function listAttendanceForOrganization(organizationId, { businessId, date, from, to } = {}) {
+  const constraints = [where("organizationId", "==", organizationId)];
+  if (businessId) constraints.push(where("businessId", "==", businessId));
+  if (date) constraints.push(where("attendanceDate", "==", date));
+  if (from) constraints.push(where("attendanceDate", ">=", from));
+  if (to) constraints.push(where("attendanceDate", "<=", to));
+  const result = await getDocs(query(collection(db, COLLECTIONS.ATTENDANCE), ...constraints));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
