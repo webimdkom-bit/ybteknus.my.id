@@ -31,6 +31,8 @@ export const COLLECTIONS = Object.freeze({
   ATTENDANCE: "attendance",
   AUDIT_LOGS: "auditLogs",
   NOTIFICATIONS: "notifications",
+  ATTENDANCE_CORRECTIONS: "attendanceCorrections",
+  OVERTIME: "overtime",
 });
 
 export async function getUserProfile(uid) {
@@ -343,6 +345,57 @@ export async function listAttendance(userId) {
     where("userId", "==", userId),
   ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function updateAttendance(attendanceId, changes) {
+  await updateDoc(doc(db, COLLECTIONS.ATTENDANCE, attendanceId), {
+    ...changes,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function createAttendanceCorrection(correction) {
+  const reference = await addDoc(collection(db, COLLECTIONS.ATTENDANCE_CORRECTIONS), {
+    ...correction,
+    createdAt: serverTimestamp(),
+  });
+  return { id: reference.id, ...correction };
+}
+
+export async function listAttendanceCorrectionsForUser(userId) {
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.ATTENDANCE_CORRECTIONS),
+    where("userId", "==", userId),
+  ));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function createOvertime(record) {
+  const reference = await addDoc(collection(db, COLLECTIONS.OVERTIME), {
+    ...record,
+    status: "pending",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return { id: reference.id, ...record, status: "pending" };
+}
+
+export async function listOvertimeForUser(userId) {
+  const result = await getDocs(query(collection(db, COLLECTIONS.OVERTIME), where("userId", "==", userId)));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function listOvertimeForBusiness(organizationId, businessId) {
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.OVERTIME),
+    where("organizationId", "==", organizationId),
+    where("businessId", "==", businessId),
+  ));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function updateOvertime(overtimeId, changes) {
+  await updateDoc(doc(db, COLLECTIONS.OVERTIME, overtimeId), { ...changes, updatedAt: serverTimestamp() });
 }
 
 export async function listAttendanceForOrganization(organizationId, { businessId, date, from, to } = {}) {

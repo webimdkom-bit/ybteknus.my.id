@@ -30,11 +30,11 @@ export async function addShift({ organizationId, businessId, name, startTime, en
   });
 }
 
-export async function assignShift({ organizationId, businessId, userId, shiftId, date, assignedBy }) {
+export async function assignShift({ organizationId, businessId, userId, shiftId, date, effectiveFrom, assignedBy }) {
   if (!organizationId || !businessId || !userId || !shiftId || !date) {
     throw new Error("Business, employee, shift, dan tanggal wajib diisi.");
   }
-  return createSchedule({ organizationId, businessId, userId, shiftId, date, assignedBy });
+  return createSchedule({ organizationId, businessId, userId, shiftId, date, effectiveFrom: effectiveFrom || date, assignedBy });
 }
 
 export { calculateAttendanceTiming, getAttendanceStatus, listSchedules, listShifts };

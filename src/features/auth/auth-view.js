@@ -14,6 +14,10 @@ export function renderAuthScreen(app) {
         <div class="auth-tabs"><button class="auth-tab active" data-auth-mode="login">Masuk</button><button class="auth-tab" data-auth-mode="register">Daftar employee</button></div>
         <form id="auth-form" class="auth-form">
           <div class="field field-register"><label for="auth-name">Nama lengkap</label><input id="auth-name" name="name" autocomplete="name" placeholder="Nama Anda" /></div>
+          <div class="field field-register"><label for="auth-phone">Nomor telepon</label><input id="auth-phone" name="phone" type="tel" autocomplete="tel" placeholder="08xxxxxxxxxx" /></div>
+          <div class="field field-register"><label for="auth-position">Jabatan / posisi</label><input id="auth-position" name="position" placeholder="Contoh: Staff operasional" /></div>
+          <div class="field field-register"><label for="auth-identity">Identitas karyawan <span>(opsional)</span></label><input id="auth-identity" name="identityNumber" placeholder="Nomor identitas" /></div>
+          <div class="field field-register"><label for="auth-photo">URL foto profil <span>(opsional)</span></label><input id="auth-photo" name="photoURL" type="url" placeholder="https://..." /></div>
           <div class="field"><label for="auth-email">Email</label><input id="auth-email" name="email" type="email" autocomplete="email" placeholder="nama@perusahaan.com" required /></div>
           <div class="field"><label for="auth-password">Password</label><div class="password-control"><input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Minimal 6 karakter" required minlength="6" /><button class="password-toggle" type="button" data-password-toggle="auth-password" aria-label="Lihat password" aria-pressed="false">Lihat</button></div></div>
           <button class="auth-link password-reset" type="button">Lupa password?</button>
@@ -98,6 +102,10 @@ export function renderAuthScreen(app) {
     const data = Object.fromEntries(new FormData(form));
     if (mode === "register" && data.password !== data.passwordConfirmation) {
       error.textContent = "Konfirmasi password tidak sama.";
+      return;
+    }
+    if (mode === "register" && (!data.phone?.trim() || !data.position?.trim())) {
+      error.textContent = "Nomor telepon dan jabatan wajib diisi.";
       return;
     }
     const submit = form.querySelector("button[type=submit]");

@@ -19,14 +19,20 @@ export async function signIn(email, password) {
   return getUserProfile(result.user.uid);
 }
 
-export async function registerEmployee({ name, email, password, business }) {
+export async function registerEmployee({ name, email, password, business, phone, position, identityNumber, photoURL }) {
   const normalizedEmail = email.trim().toLowerCase();
   const result = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
-  await updateProfile(result.user, { displayName: name });
+  await updateProfile(result.user, { displayName: name, photoURL: photoURL?.trim() || null });
 
+  const joinedAt = new Date().toISOString().slice(0, 10);
   await createUserProfile(result.user.uid, {
     displayName: name,
     email: normalizedEmail,
+    phone: phone?.trim() || "",
+    identityNumber: identityNumber?.trim() || "",
+    position: position?.trim() || "",
+    photoURL: photoURL?.trim() || "",
+    joinedAt,
     role: "employee",
     status: "pending",
     organizationId: business.organizationId,
@@ -40,6 +46,8 @@ export async function registerEmployee({ name, email, password, business }) {
     organizationId: business.organizationId,
     businessId: business.id,
     businessName: business.name,
+    phone: phone?.trim() || "",
+    position: position?.trim() || "",
   });
 
   const payload = {

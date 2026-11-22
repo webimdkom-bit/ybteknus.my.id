@@ -1,4 +1,4 @@
-import { createAttendance, getBusiness, getShift, listAttendance, listEmployeeSchedules, updateBusiness } from "../../lib/firestore/repositories.js";
+import { createAttendance, getBusiness, getShift, listAttendance, listEmployeeSchedules, listOperationalRequestsForUser, updateBusiness } from "../../lib/firestore/repositories.js";
 import { calculateDistanceMeters, getLocationStatus, parseGoogleMapsCoordinates } from "./gps-calculations.js";
 import { calculateAttendanceTiming } from "../schedules/schedule-calculations.js";
 
@@ -35,14 +35,16 @@ export async function recordGpsAttendance({ userId, organizationId, businessId, 
   const distanceMeters = calculateDistanceMeters(latitude, longitude, business.location.latitude, business.location.longitude);
   const radiusMeters = Number(business.location.radiusMeters) || DEFAULT_RADIUS_METERS;
   const locationStatus = getLocationStatus({ distanceMeters, radiusMeters, accuracy });
-  if (locationStatus !== "valid") {
+  const now = new Date();
+  const attendanceDate = getDateKey(now);
+  const recordedTime = getTimeKey(now);
+  const offsite = locationStatus === "valid" ? null : await getApprovedOffsiteRequest({ userId, businessId, date: attendanceDate, type });
+  if (locationStatus !== "valid" && !offsite) {
     throw new Error(locationStatus === "low-accuracy"
       ? `Akurasi GPS terlalu rendah (${Math.round(accuracy)}m). Coba ke area terbuka lalu ulangi.`
       : `Anda berada ${Math.round(distanceMeters)}m dari lokasi absensi. Batasnya ${radiusMeters}m.`);
   }
-  const now = new Date();
-  const attendanceDate = getDateKey(now);
-  const recordedTime = getTimeKey(now);
+  const effectiveLocationStatus = offsite ? "offsite-approved" : locationStatus;
   const shift = await getEmployeeShift({ userId, organizationId, businessId, date: attendanceDate });
   const timing = shift ? calculateAttendanceTiming({
     scheduledStart: shift.startTime,
@@ -62,7 +64,8 @@ export async function recordGpsAttendance({ userId, organizationId, businessId, 
     longitude,
     accuracyMeters: Math.round(accuracy),
     distanceMeters: Math.round(distanceMeters),
-    locationStatus,
+    locationStatus: effectiveLocationStatus,
+    offsiteRequestId: offsite?.id || null,
     attendanceDate,
     recordedTime,
     attendanceStatus: timing?.status || (type === "check-in" ? "belum lengkap" : "tercatat"),
@@ -73,6 +76,22 @@ export async function recordGpsAttendance({ userId, organizationId, businessId, 
     toleranceMinutes: shift?.toleranceMinutes || 0,
     clientRecordedAt: now.toISOString(),
   });
+}
+
+async function getApprovedOffsiteRequest({ userId, businessId, date, type }) {
+  try {
+    const requests = await listOperationalRequestsForUser(userId);
+    return requests.find((request) => {
+      if (request.type !== "offsite" || request.status !== "approved" || request.businessId !== businessId) return false;
+      if (request.startDate && date < request.startDate) return false;
+      if (request.endDate && date > request.endDate) return false;
+      const actions = request.allowedActions || [];
+      return !actions.length || actions.includes(type) || actions.includes("both");
+    }) || null;
+  } catch (error) {
+    console.warn("[attendance] offsite permission:", error?.message || error);
+    return null;
+  }
 }
 
 export async function getDailyAttendance({ userId, businessId, date = getDateKey(new Date()) }) {
