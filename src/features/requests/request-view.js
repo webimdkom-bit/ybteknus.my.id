@@ -6,6 +6,7 @@ import {
   reviewOperationalRequest,
 } from "../../lib/firestore/repositories.js";
 import { getBusiness } from "../../lib/firestore/repositories.js";
+import { logAuditSafe } from "../audit-trail/index.js";
 
 const REQUEST_TYPES = Object.freeze([
   ["permission", "Izin"],
@@ -57,7 +58,8 @@ async function setupEmployeeRequests(overlay, profile) {
     const submit = form.querySelector("button[type=submit]");
     submit.disabled = true;
     try {
-      await createOperationalRequest({ ...data, userId: profile.uid, organizationId: profile.organizationId });
+      const request = await createOperationalRequest({ ...data, userId: profile.uid, organizationId: profile.organizationId });
+      logAuditSafe({ profile, action: "request_submitted", targetType: "request", targetId: request?.id || null, businessId: data.businessId, metadata: { type: data.type } });
       form.reset();
       message.textContent = "Pengajuan berhasil dikirim dan menunggu persetujuan.";
       await load();
@@ -81,6 +83,7 @@ async function setupRequestReview(overlay, profile) {
       button.disabled = true;
       try {
         await reviewOperationalRequest(request.id, { status: button.dataset.requestAction, reviewedBy: profile.uid, reviewedAt: new Date().toISOString(), reviewNote: reviewNote || "" });
+        logAuditSafe({ profile, action: button.dataset.requestAction === "approved" ? "request_approved" : "request_rejected", targetType: "request", targetId: request.id, businessId: request.businessId, metadata: { type: request.type, reviewNote: reviewNote || "" } });
         await setupRequestReview(overlay, profile);
       } catch (error) { button.closest(".request-row").querySelector(".request-error").textContent = error.message; button.disabled = false; }
     }));

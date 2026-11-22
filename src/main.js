@@ -15,11 +15,14 @@ import { openAdminManager } from "./features/admins/admin-view.js";
 import { openEmployeeManager } from "./features/employees/employee-view.js";
 import { openRequestManager } from "./features/requests/request-view.js";
 import { openTaskManager } from "./features/tasks/task-view.js";
+import { openAuditViewer } from "./features/audit-trail/audit-view.js";
+import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
 import { getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules } from "./lib/firestore/repositories.js";
-import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut } from "lucide";
+import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck } from "lucide";
 
 const app = document.querySelector("#app");
+const auditedLogins = new Set();
 
 function renderDashboard(profile) {
   if (profile?.role === "employee") {
@@ -72,7 +75,8 @@ function renderOwnerDashboard(profile) {
        <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
        <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
        <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>${profile?.role === "owner" ? "08" : "06"}</b></a>
-       <a class="nav-item" href="#reports"><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
+        <a class="nav-item" href="#reports"><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
+        <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>10</b></a>
       </nav>
 
       <div class="sidebar-bottom">
@@ -195,6 +199,7 @@ function renderOwnerDashboard(profile) {
     event.preventDefault();
     if (profile.role === "owner") openLocationSettings({ profile });
   });
+  document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
   document.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
 }
 
@@ -212,6 +217,7 @@ function renderAdminDashboard(profile) {
           <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal</span><b>04</b></a>
           <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>05</b></a>
           <a class="nav-item" href="#reports"><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>06</b></a>
+          <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>07</b></a>
         </nav>
         <div class="sidebar-bottom"><div class="profile-mini"><div class="avatar">${initials(profile?.displayName)}</div><div><strong>${profile?.displayName || "User"}</strong><span>Admin · YB Tech</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
       </aside>
@@ -235,6 +241,7 @@ function renderAdminDashboard(profile) {
   });
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
+  document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
 }
 
 function renderEmployeeDashboard(profile) {
@@ -411,7 +418,7 @@ function wireDashboardChrome() {
 }
 
 function renderDashboardIcons() {
-  createIcons({ icons: { Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut } });
+  createIcons({ icons: { Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck } });
 }
 
 async function wireBusinessSwitcher(profile, onScopeChange) {
@@ -473,6 +480,10 @@ subscribeToAuth(async (user) => {
     if (profile.status !== "active") {
       renderPendingState(profile);
       return;
+    }
+    if (!auditedLogins.has(profile.uid)) {
+      auditedLogins.add(profile.uid);
+      logAuditSafe({ profile, action: "login", targetType: "user", targetId: profile.uid });
     }
     renderDashboard(profile);
   } catch (error) {

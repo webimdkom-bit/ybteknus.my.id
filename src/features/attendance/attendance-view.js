@@ -1,5 +1,6 @@
 import { getBusiness, listBusinessesForOrganization } from "../../lib/firestore/repositories.js";
 import { getDailyAttendance, parseGoogleMapsCoordinates, recordGpsAttendance, saveBusinessLocation } from "./attendance-service.js";
+import { logAuditSafe } from "../audit-trail/index.js";
 
 export async function openLocationSettings({ profile }) {
   const businesses = await listBusinessesForOrganization(profile.organizationId);
@@ -45,6 +46,7 @@ export async function openLocationSettings({ profile }) {
       if (!businessSelect.value) throw new Error("Pilih bisnis terlebih dahulu.");
       const data = Object.fromEntries(new FormData(form));
       await saveBusinessLocation(businessSelect.value, { ...data, isActive: form.querySelector("[name=isActive]").checked });
+      logAuditSafe({ profile, action: "business_location_changed", targetType: "business", targetId: businessSelect.value, businessId: businessSelect.value, metadata: { radiusMeters: data.radiusMeters, isActive: form.querySelector("[name=isActive]").checked } });
       close();
     } catch (submissionError) { error.textContent = submissionError.message; }
   });

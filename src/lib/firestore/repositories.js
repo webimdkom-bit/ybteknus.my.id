@@ -28,6 +28,7 @@ export const COLLECTIONS = Object.freeze({
   TASKS: "tasks",
   TASK_REPORTS: "taskReports",
   ATTENDANCE: "attendance",
+  AUDIT_LOGS: "auditLogs",
 });
 
 export async function getUserProfile(uid) {
@@ -349,6 +350,14 @@ export async function listAttendanceForOrganization(organizationId, { businessId
   if (from) constraints.push(where("attendanceDate", ">=", from));
   if (to) constraints.push(where("attendanceDate", "<=", to));
   const result = await getDocs(query(collection(db, COLLECTIONS.ATTENDANCE), ...constraints));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function listAuditLogs(organizationId, { businessId, max = 100 } = {}) {
+  const constraints = [where("organizationId", "==", organizationId)];
+  if (businessId) constraints.push(where("businessId", "==", businessId));
+  constraints.push(limit(max));
+  const result = await getDocs(query(collection(db, COLLECTIONS.AUDIT_LOGS), ...constraints));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 

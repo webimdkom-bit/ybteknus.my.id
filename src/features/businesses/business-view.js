@@ -1,5 +1,6 @@
 import { listBusinessesForOrganization, listEmployees, transferEmployee, updateBusiness } from "../../lib/firestore/repositories.js";
 import { createOwnerBusiness } from "./business-service.js";
+import { logAuditSafe } from "../audit-trail/index.js";
 
 export async function openBusinessManager({ profile }) {
   const overlay = document.createElement("div");
@@ -39,13 +40,15 @@ export async function openBusinessManager({ profile }) {
       list.innerHTML = businesses.length ? businesses.map((business) => businessRow(business)).join("") : `<p class="business-empty">Belum ada bisnis. Tambahkan bisnis pertama Anda.</p>`;
        list.querySelectorAll("[data-toggle-registration]").forEach((button) => button.addEventListener("click", async () => {
         button.disabled = true;
-        await updateBusiness(button.dataset.toggleRegistration, { acceptingRegistrations: button.dataset.nextValue === "true" });
-         await loadBusinesses();
+         await updateBusiness(button.dataset.toggleRegistration, { acceptingRegistrations: button.dataset.nextValue === "true" });
+         logAuditSafe({ profile, action: "business_registration_toggled", targetType: "business", targetId: button.dataset.toggleRegistration, metadata: { acceptingRegistrations: button.dataset.nextValue === "true" } });
+          await loadBusinesses();
        }));
        list.querySelectorAll("[data-toggle-status]").forEach((button) => button.addEventListener("click", async () => {
          button.disabled = true;
-         await updateBusiness(button.dataset.toggleStatus, { status: button.dataset.nextStatus, acceptingRegistrations: button.dataset.nextStatus === "active" });
-         await loadBusinesses();
+          await updateBusiness(button.dataset.toggleStatus, { status: button.dataset.nextStatus, acceptingRegistrations: button.dataset.nextStatus === "active" });
+          logAuditSafe({ profile, action: button.dataset.nextStatus === "active" ? "business_activated" : "business_deactivated", targetType: "business", targetId: button.dataset.toggleStatus, businessId: button.dataset.toggleStatus, metadata: { status: button.dataset.nextStatus } });
+          await loadBusinesses();
        }));
        list.querySelectorAll("[data-edit-business]").forEach((button) => button.addEventListener("click", () => {
          const business = businesses.find((item) => item.id === button.dataset.editBusiness);
@@ -71,8 +74,13 @@ export async function openBusinessManager({ profile }) {
     submit.disabled = true;
     try {
       const data = Object.fromEntries(new FormData(form));
-      if (editingBusinessId) await updateBusiness(editingBusinessId, { name: data.name.trim(), city: data.city.trim() });
-      else await createOwnerBusiness({ organizationId: profile.organizationId, ...data });
+      if (editingBusinessId) {
+        await updateBusiness(editingBusinessId, { name: data.name.trim(), city: data.city.trim() });
+        logAuditSafe({ profile, action: "business_updated", targetType: "business", targetId: editingBusinessId, businessId: editingBusinessId, metadata: { name: data.name.trim(), city: data.city.trim() } });
+      } else {
+        const created = await createOwnerBusiness({ organizationId: profile.organizationId, ...data });
+        logAuditSafe({ profile, action: "business_created", targetType: "business", targetId: created?.id || null, metadata: { name: data.name.trim(), city: data.city.trim() } });
+      }
       form.reset();
       error.textContent = "";
       editingBusinessId = null;
@@ -97,6 +105,7 @@ export async function openBusinessManager({ profile }) {
     submit.disabled = true;
     try {
       await transferEmployee({ userId: employeeOption.value, organizationId: profile.organizationId, businessId });
+      logAuditSafe({ profile, action: "employee_transferred", targetType: "user", targetId: employeeOption.value, businessId, metadata: { fromBusinessId: employeeOption.dataset.currentBusiness, toBusinessId: businessId } });
       employeeOption.dataset.currentBusiness = businessId;
       message.textContent = `${employeeOption.textContent.split(" · ")[0]} berhasil dipindahkan.`;
     } catch (transferError) { error.textContent = transferError.message; }

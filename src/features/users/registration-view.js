@@ -1,5 +1,6 @@
 import { listBusinessesForOrganization } from "../../lib/firestore/repositories.js";
 import { approveEmployeeRegistration, listPendingRegistrations, rejectEmployeeRegistration } from "./registration-service.js";
+import { logAuditSafe } from "../audit-trail/index.js";
 
 export async function openRegistrationManager({ profile }) {
   const overlay = document.createElement("div");
@@ -26,8 +27,13 @@ export async function openRegistrationManager({ profile }) {
         if (!registration) return;
         button.disabled = true;
         try {
-          if (button.dataset.registrationAction === "approve") await approveEmployeeRegistration(registration);
-          else await rejectEmployeeRegistration(registration);
+          if (button.dataset.registrationAction === "approve") {
+            await approveEmployeeRegistration(registration);
+            logAuditSafe({ profile, action: "employee_approved", targetType: "registration", targetId: registration.id, businessId: registration.businessId, metadata: { userId: registration.userId, name: registration.name, email: registration.email } });
+          } else {
+            await rejectEmployeeRegistration(registration);
+            logAuditSafe({ profile, action: "employee_rejected", targetType: "registration", targetId: registration.id, businessId: registration.businessId, metadata: { userId: registration.userId, name: registration.name, email: registration.email } });
+          }
           await loadRegistrations();
         } catch (error) {
           button.disabled = false;

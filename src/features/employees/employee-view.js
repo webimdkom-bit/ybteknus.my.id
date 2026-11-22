@@ -1,4 +1,5 @@
 import { getBusiness, listEmployeesForBusiness, updateUserProfile } from "../../lib/firestore/repositories.js";
+import { logAuditSafe } from "../audit-trail/index.js";
 
 export async function openEmployeeManager({ profile }) {
   const overlay = document.createElement("div");
@@ -18,6 +19,7 @@ export async function openEmployeeManager({ profile }) {
       button.disabled = true;
       try {
         await updateUserProfile(button.dataset.toggleEmployee, { status: button.dataset.nextStatus });
+        logAuditSafe({ profile, action: "account_status_changed", targetType: "user", targetId: button.dataset.toggleEmployee, metadata: { status: button.dataset.nextStatus } });
         button.closest(".employee-management-row").querySelector(".employee-status").textContent = button.dataset.nextStatus === "active" ? "Aktif" : "Nonaktif";
         button.textContent = button.dataset.nextStatus === "active" ? "Nonaktifkan" : "Aktifkan";
         button.dataset.nextStatus = button.dataset.nextStatus === "active" ? "inactive" : "active";

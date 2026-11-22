@@ -1,5 +1,6 @@
 import { signOutUser } from "../auth/auth-service.js";
 import { createOwnerAccount, deactivateOwner, listOwners } from "./owner-service.js";
+import { logAuditSafe } from "../audit-trail/index.js";
 
 export async function openOwnerManager({ profile }) {
   const overlay = document.createElement("div");
@@ -42,6 +43,7 @@ export async function openOwnerManager({ profile }) {
         button.disabled = true;
         try {
           await deactivateOwner(owner.id);
+          logAuditSafe({ profile, action: "account_deactivated", targetType: "user", targetId: owner.id, metadata: { role: "owner", email: owner.email } });
           if (owner.id === profile.uid) {
             await signOutUser();
             return;
@@ -70,6 +72,7 @@ export async function openOwnerManager({ profile }) {
     try {
       const data = Object.fromEntries(new FormData(form));
       await createOwnerAccount({ organizationId: profile.organizationId, ...data });
+      logAuditSafe({ profile, action: "owner_created", targetType: "user", metadata: { name: data.name, email: data.email } });
       form.reset();
       message.textContent = "Owner berhasil dibuat. Link setup password telah dikirim ke email tersebut.";
       await loadOwners();

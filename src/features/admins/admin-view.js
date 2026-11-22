@@ -1,5 +1,6 @@
 import { listBusinessesForOrganization, listMembershipsForUser } from "../../lib/firestore/repositories.js";
 import { ADMIN_PERMISSION_OPTIONS, createAdminAccount, deactivateAdmin, listAdmins, updateAdminAccess } from "./admin-service.js";
+import { logAuditSafe } from "../audit-trail/index.js";
 
 export async function openAdminManager({ profile }) {
   const overlay = document.createElement("div");
@@ -48,7 +49,11 @@ export async function openAdminManager({ profile }) {
       adminList.querySelectorAll("[data-deactivate-admin]").forEach((button) => button.addEventListener("click", async () => {
         if (!window.confirm("Nonaktifkan akses Admin ini?")) return;
         button.disabled = true;
-        try { await deactivateAdmin(button.dataset.deactivateAdmin); await loadAdmins(); }
+         try {
+           await deactivateAdmin(button.dataset.deactivateAdmin);
+           logAuditSafe({ profile, action: "admin_deactivated", targetType: "user", targetId: button.dataset.deactivateAdmin });
+           await loadAdmins();
+         }
         catch (error) { overlay.querySelector(".owner-error").textContent = error.message; button.disabled = false; }
       }));
     } catch (error) { adminList.innerHTML = `<p class="owner-error">${error.message}</p>`; }
@@ -69,9 +74,11 @@ export async function openAdminManager({ profile }) {
       const data = Object.fromEntries(new FormData(form));
       if (editingAdmin) {
         await updateAdminAccess({ userId: editingAdmin.id, organizationId: profile.organizationId, access });
+        logAuditSafe({ profile, action: "admin_access_changed", targetType: "membership", targetId: editingAdmin.id, metadata: { access } });
         message.textContent = "Akses Admin diperbarui.";
       } else {
         await createAdminAccount({ organizationId: profile.organizationId, ...data, access });
+        logAuditSafe({ profile, action: "admin_created", targetType: "user", metadata: { name: data.name, email: data.email, access } });
         message.textContent = "Admin berhasil dibuat. Link setup password telah dikirim.";
       }
       resetAdminForm(form, businessList, businesses, overlay);

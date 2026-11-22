@@ -14,6 +14,7 @@ import {
   reviewTaskReport,
 } from "../../lib/firestore/repositories.js";
 import { requestUploadSignature, uploadFileToCloudinary } from "../files/file-upload-service";
+import { logAuditSafe } from "../audit-trail/index.js";
 
 export async function openTaskManager({ profile }) {
   const overlay = document.createElement("div");
@@ -60,7 +61,7 @@ async function setupTaskForm(overlay, profile) {
     message.textContent = "";
     submit.disabled = true;
     try {
-      await createTask({
+      const task = await createTask({
         organizationId: profile.organizationId,
         businessId: data.businessId,
         title: data.title.trim(),
@@ -73,6 +74,7 @@ async function setupTaskForm(overlay, profile) {
         rootTaskId: null,
         checklist: data.checklist.split("\n").map((label, index) => ({ id: `item-${index + 1}`, label: label.trim(), completed: false })).filter((item) => item.label),
       });
+      logAuditSafe({ profile, action: "task_created", targetType: "task", targetId: task?.id || null, businessId: data.businessId, metadata: { title: data.title.trim(), assignedTo: [data.assignedTo], priority: data.priority } });
       form.reset();
       message.textContent = "Tugas berhasil dibuat.";
       await loadTaskList(overlay, profile);
@@ -139,7 +141,9 @@ function bindTaskActions(overlay, profile, tasks, reports) {
       const uploaded = await uploadFileToCloudinary({ file, signature, folder: signature.folder, publicId: signature.public_id });
       const description = window.prompt("Tulis laporan pekerjaan:", task.description || "");
       if (!description) return;
-      await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: uploaded.secure_url, checklist: task.checklist || [] });
+      const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: uploaded.secure_url, checklist: task.checklist || [] });
+      logAuditSafe({ profile, action: "report_submitted", targetType: "taskReport", targetId: report?.id || null, businessId: task.businessId, metadata: { taskId: task.id, fileName: file.name, evidenceUrl: uploaded.secure_url } });
+      logAuditSafe({ profile, action: "file_uploaded", targetType: "file", targetId: uploaded.public_id || null, businessId: task.businessId, metadata: { fileName: file.name, taskId: task.id } });
       await updateTask(task.id, { status: "submitted" });
     } catch (error) { window.alert(error.message); }
     input.disabled = false;
@@ -149,6 +153,16 @@ function bindTaskActions(overlay, profile, tasks, reports) {
   overlay.querySelectorAll("[data-report-action]").forEach((button) => button.addEventListener("click", async () => {
     const note = window.prompt("Catatan review (opsional):", "") || "";
     await reviewTaskReport(button.dataset.reportId, { status: button.dataset.reportAction, reviewedBy: profile.uid, reviewNote: note, reviewedAt: new Date().toISOString() });
+    const report = reports.find((item) => item.id === button.dataset.reportId);
+    const task = tasks.find((item) => item.id === button.dataset.taskId);
+    logAuditSafe({
+      profile,
+      action: button.dataset.reportAction === "approved" ? "report_approved" : "report_revision_requested",
+      targetType: "taskReport",
+      targetId: button.dataset.reportId,
+      businessId: task?.businessId || report?.businessId || null,
+      metadata: { taskId: button.dataset.taskId, reviewNote: note },
+    });
     await updateTask(button.dataset.taskId, { status: button.dataset.reportAction === "approved" ? "approved" : "revision" });
     await loadTaskList(overlay, profile);
   }));
