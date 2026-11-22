@@ -21,7 +21,8 @@ export const handler = async (event) => {
 
   const publicId = `evidence/${uid}/${taskId}/${fileName}`.replace(/[^a-zA-Z0-9/_-]/g, "_");
   const folder = `tasks/${uid}`;
-  const signature = await generateUploadSignature({ publicId, folder });
+  const resourceType = body.resourceType === "raw" ? "raw" : "image";
+  const signature = await generateUploadSignature({ publicId, folder, resourceType });
 
   return {
     statusCode: 200,

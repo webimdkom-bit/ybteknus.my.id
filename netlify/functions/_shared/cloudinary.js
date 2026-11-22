@@ -8,7 +8,7 @@ function configureCloudinary() {
   });
 }
 
-export async function generateUploadSignature({ publicId, folder }) {
+export async function generateUploadSignature({ publicId, folder, resourceType = "image" }) {
   configureCloudinary();
   const timestamp = Math.floor(Date.now() / 1000);
   const params = { public_id: publicId, timestamp };
@@ -19,6 +19,7 @@ export async function generateUploadSignature({ publicId, folder }) {
     publicId,
     folder,
     signature,
-    uploadUrl: `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+    resourceType,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
   };
 }

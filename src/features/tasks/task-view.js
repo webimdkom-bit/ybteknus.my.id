@@ -11,10 +11,14 @@ import {
   listTasksForUser,
   listTaskReportsForBusiness,
   listTaskReportsForOrganization,
+  listTaskCategories,
+  createTaskCategory,
   updateTask,
   reviewTaskReport,
 } from "../../lib/firestore/repositories.js";
-import { requestUploadSignature, uploadFileToCloudinary } from "../files/file-upload-service.js";
+import { DEFAULT_TASK_CATEGORIES } from "../../config/constants.js";
+import { getTimeStatus } from "./task-status.js";
+import { recordFileMetadata, requestFileAccess, requestUploadSignature, uploadFileToCloudinary } from "../files/file-upload-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 
@@ -39,36 +43,62 @@ export async function openTaskManager({ profile }) {
 }
 
 function taskFormMarkup() {
-  return `<form class="task-form"><h3>Buat tugas</h3><div class="field"><label for="task-business">Bisnis</label><select id="task-business" name="businessId" required><option value="">Memuat bisnis...</option></select></div><div class="field"><label for="task-assignee">Berikan kepada</label><select id="task-assignee" name="assignedTo" required><option value="">Pilih penerima</option></select></div><div class="field"><label for="task-name">Judul tugas</label><input id="task-name" name="title" placeholder="Contoh: Inventory check" required /></div><div class="field"><label for="task-description">Deskripsi</label><textarea id="task-description" name="description" rows="3" required></textarea></div><div class="task-form-grid"><div class="field"><label for="task-deadline">Deadline</label><input id="task-deadline" name="deadline" type="date" required /></div><div class="field"><label for="task-priority">Prioritas</label><select id="task-priority" name="priority"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select></div></div><div class="field"><label for="task-checklist">Checklist <span>(satu item per baris)</span></label><textarea id="task-checklist" name="checklist" rows="3" placeholder="Periksa stok\nFoto rak"></textarea></div><p class="task-message" role="status"></p><p class="task-error" role="alert"></p><button class="primary-button" type="submit">Buat tugas <span>→</span></button></form>`;
+  return `<form class="task-form"><h3>Buat tugas</h3><div class="field"><label for="task-business">Bisnis</label><select id="task-business" name="businessId" required><option value="">Memuat bisnis...</option></select></div><div class="field"><label>Penerima <span>(bisa lebih dari satu)</span></label><div class="task-assignee-list" id="task-assignees"><p class="task-empty">Memuat penerima...</p></div></div><div class="field"><label for="task-category">Kategori</label><div class="task-category-row"><select id="task-category" name="category">${DEFAULT_TASK_CATEGORIES.map((category) => `<option>${category}</option>`).join("")}</select><button class="secondary-button" type="button" data-add-category hidden>Kategori baru</button></div></div><div class="field"><label for="task-name">Judul tugas</label><input id="task-name" name="title" placeholder="Contoh: Inventory check" required /></div><div class="field"><label for="task-description">Deskripsi</label><textarea id="task-description" name="description" rows="3" required></textarea></div><div class="task-form-grid"><div class="field"><label for="task-deadline">Deadline</label><input id="task-deadline" name="deadline" type="date" required /></div><div class="field"><label for="task-priority">Prioritas</label><select id="task-priority" name="priority"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select></div></div><div class="field"><label for="task-checklist">Checklist <span>(satu item per baris)</span></label><textarea id="task-checklist" name="checklist" rows="3" placeholder="Periksa stok\nFoto rak"></textarea></div><p class="task-message" role="status"></p><p class="task-error" role="alert"></p><button class="primary-button" type="submit">Buat tugas <span>→</span></button></form>`;
 }
 
 async function setupTaskForm(overlay, profile, canManage) {
   const form = overlay.querySelector(".task-form");
   const businessSelect = form.querySelector("#task-business");
-  const assigneeSelect = form.querySelector("#task-assignee");
+  const assigneeList = form.querySelector("#task-assignees");
+  const categorySelect = form.querySelector("#task-category");
+  const addCategoryButton = form.querySelector("[data-add-category]");
+  if (profile.role === "owner") addCategoryButton.hidden = false;
   const businesses = profile.role === "owner"
     ? listBusinessesForOrganization(profile.organizationId)
     : Promise.all((profile.businessIds || []).map((id) => getBusiness(id)));
   const visibleBusinesses = (await businesses).filter(Boolean).filter((business) => business.status !== "inactive");
   businessSelect.innerHTML = visibleBusinesses.map((business) => `<option value="${business.id}">${business.name}</option>`).join("");
+
   const loadAssignees = async () => {
     const businessId = businessSelect.value;
     if (!businessId) return;
     const employees = await listEmployeesForBusiness(profile.organizationId, businessId);
     const admins = profile.role === "owner" ? await listAdmins(profile.organizationId) : [];
     const people = [...admins.filter((admin) => admin.businessIds?.includes(businessId)), ...employees];
-    assigneeSelect.innerHTML = people.length ? people.map((person) => `<option value="${person.id}">${person.displayName || person.email} · ${person.role === "admin" ? "Admin" : "Employee"}</option>`).join("") : `<option value="">Belum ada penerima</option>`;
+    assigneeList.innerHTML = people.length
+      ? people.map((person) => `<label><input type="checkbox" data-task-assignee="${person.id}" /> ${person.displayName || person.email} · ${person.role === "admin" ? "Admin" : "Employee"}</label>`).join("")
+      : `<p class="task-empty">Belum ada penerima.</p>`;
   };
+  const loadCategories = async () => {
+    try {
+      const categories = await listTaskCategories(profile.organizationId);
+      const all = [...new Set([...DEFAULT_TASK_CATEGORIES, ...categories.map((item) => item.name)])];
+      categorySelect.innerHTML = all.map((category) => `<option>${category}</option>`).join("");
+    } catch (error) { console.warn("[tasks] categories:", error?.message || error); }
+  };
+  addCategoryButton.addEventListener("click", async () => {
+    const name = window.prompt("Nama kategori tugas baru:");
+    if (!name?.trim()) return;
+    try {
+      await createTaskCategory({ organizationId: profile.organizationId, name: name.trim() });
+      await loadCategories();
+      categorySelect.value = name.trim();
+    } catch (error) { window.alert(error.message); }
+  });
   businessSelect.addEventListener("change", loadAssignees);
   await loadAssignees();
+  await loadCategories();
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form));
+    const assignedTo = [...form.querySelectorAll("[data-task-assignee]:checked")].map((input) => input.value);
     const error = form.querySelector(".task-error");
     const message = form.querySelector(".task-message");
     const submit = form.querySelector("button[type=submit]");
     error.textContent = "";
     message.textContent = "";
+    if (!assignedTo.length) { error.textContent = "Pilih minimal satu penerima."; return; }
     submit.disabled = true;
     try {
       const task = await createTask({
@@ -78,15 +108,17 @@ async function setupTaskForm(overlay, profile, canManage) {
         description: data.description.trim(),
         deadline: data.deadline,
         priority: data.priority,
-        assignedTo: [data.assignedTo],
+        category: data.category,
+        assignedTo,
         createdBy: profile.uid,
         assignedBy: profile.uid,
         parentTaskId: null,
         rootTaskId: null,
+        timeStatus: getTimeStatus({ deadline: data.deadline, status: "assigned" }),
         checklist: data.checklist.split("\n").map((label, index) => ({ id: `item-${index + 1}`, label: label.trim(), completed: false })).filter((item) => item.label),
       });
-      logAuditSafe({ profile, action: "task_created", targetType: "task", targetId: task?.id || null, businessId: data.businessId, metadata: { title: data.title.trim(), assignedTo: [data.assignedTo], priority: data.priority } });
-      notifySafe({ type: NOTIFICATION_TYPES.taskCreated, title: "Tugas baru", body: data.title.trim(), organizationId: profile.organizationId, businessId: data.businessId, targetType: "task", targetId: task?.id || null, userIds: [data.assignedTo] });
+      logAuditSafe({ profile, action: "task_created", targetType: "task", targetId: task?.id || null, businessId: data.businessId, metadata: { title: data.title.trim(), assignedTo, priority: data.priority, category: data.category } });
+      notifySafe({ type: NOTIFICATION_TYPES.taskCreated, title: "Tugas baru", body: data.title.trim(), organizationId: profile.organizationId, businessId: data.businessId, targetType: "task", targetId: task?.id || null, userIds: assignedTo });
       form.reset();
       message.textContent = "Tugas berhasil dibuat.";
       await loadTaskList(overlay, profile, canManage);
@@ -117,6 +149,14 @@ async function loadTaskList(overlay, profile, canManage) {
   } catch (error) { list.innerHTML = `<p class="task-error">${error.message}</p>`; }
 }
 
+async function syncTimeStatus(taskId, tasks, status) {
+  const task = tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  await updateTask(taskId, {
+    timeStatus: getTimeStatus({ deadline: task.deadline, submittedAt: new Date().toISOString(), status }),
+  });
+}
+
 function parentProgress(parentId, tasks) {
   const children = tasks.filter((task) => task.parentTaskId === parentId);
   if (!children.length) return 0;
@@ -139,16 +179,16 @@ function taskRow(task, tasks, reports, profile, canManage) {
   const childrenMarkup = children.length ? `<div class="task-children"><div class="task-children-head"><strong>Tugas turunan</strong><span>${approvedChildren}/${children.length} disetujui · ${progress}%</span></div><div class="task-child-progress"><i style="width:${progress}%"></i></div>${children.map((child) => `<div class="task-child-row"><span>${child.title}</span><b class="task-status ${child.status}">${child.status}</b></div>`).join("")}</div>` : "";
   const subtaskForm = isRoot && mayManage ? `<div class="subtask-form" data-subtask-form="${task.id}" hidden><input type="text" data-subtask-title placeholder="Judul subtugas" /><textarea data-subtask-description rows="2" placeholder="Deskripsi subtugas"></textarea><div class="task-form-grid"><input type="date" data-subtask-deadline value="${task.deadline || ""}" /><select data-subtask-assignee><option value="">Pilih employee</option></select></div><button class="primary-button" type="button" data-subtask-submit="${task.id}">Buat subtugas</button></div>` : "";
   const actions = profile.role === "employee"
-    ? `<button class="secondary-button task-start" data-task-action="start" data-task-id="${task.id}">${task.status === "assigned" ? "Mulai tugas" : task.status === "in-progress" ? "Sedang dikerjakan" : task.status}</button><button class="primary-button task-report" data-task-action="report" data-task-id="${task.id}">${report ? "Lihat laporan" : "Kirim laporan"}</button><input type="file" class="task-evidence-file" data-task-evidence="${task.id}" accept="image/*" hidden />`
+    ? `<button class="secondary-button task-start" data-task-action="start" data-task-id="${task.id}">${task.status === "assigned" ? "Mulai tugas" : task.status === "in-progress" ? "Sedang dikerjakan" : task.status}</button><button class="primary-button task-report" data-task-action="report" data-task-id="${task.id}">${report ? "Lihat laporan" : "Kirim laporan"}</button><input type="file" class="task-evidence-file" data-task-evidence="${task.id}" accept="image/*,.pdf,.doc,.docx" hidden />`
     : `<span class="task-assignee">${task.assignedTo?.length || 0} penerima</span>${isRoot && mayManage ? `<button class="secondary-button" data-subtask-toggle="${task.id}">Buat subtugas</button>` : ""}${canCreateFinal ? `<button class="primary-button" data-final-report="${task.id}">Laporan akhir</button>` : ""}${canCancel ? `<button class="reject-registration" data-task-cancel="${task.id}">Batalkan</button>` : ""}`;
 
   const finalMarkup = finalReport ? `<div class="task-final-report"><div><strong>Laporan akhir${finalReport.userId === profile.uid ? " Anda" : ""}</strong><span>${finalReport.description || "-"}</span></div><b class="task-status ${finalReport.status}">${finalReport.status}</b>${profile.role === "owner" && finalReport.status === "submitted" ? `<button class="approve-registration" data-final-action="approved" data-final-report-id="${finalReport.id}" data-final-task-id="${task.id}">Setujui akhir</button><button class="reject-registration" data-final-action="revision" data-final-report-id="${finalReport.id}" data-final-task-id="${task.id}">Revisi akhir</button>` : ""}${finalReport.userId === profile.uid && finalReport.status === "revision" ? `<button class="secondary-button" data-final-resubmit="${finalReport.id}" data-final-task-id="${task.id}">Kirim ulang</button>` : ""}</div>` : "";
 
-  return `<article class="task-row ${overdue ? "is-overdue" : ""} ${isRoot ? "is-parent" : "is-child"}"><div class="task-row-head"><div><strong>${task.title}</strong><span>${task.priority || "normal"} · deadline ${task.deadline || "-"}${children.length ? ` · progres ${progress}%` : ""}</span></div><b class="task-status ${task.status}">${overdue ? "overdue" : task.status}</b></div><p>${task.description || ""}</p>${checklist.length ? `<div class="task-checklist">${checklist.map((item) => `<label><input type="checkbox" data-task-check="${task.id}" data-check-id="${item.id}" ${item.completed ? "checked" : ""} ${profile.role === "employee" ? "" : "disabled"} />${item.label}</label>`).join("")}</div>` : ""}${childrenMarkup}<div class="task-row-actions">${actions}</div>${subtaskForm}${finalMarkup}${profile.role !== "employee" ? reports.filter((item) => item.taskId === task.id && !item.isFinal).map((item) => reportRow(item)).join("") : ""}</article>`;
+  return `<article class="task-row ${overdue ? "is-overdue" : ""} ${isRoot ? "is-parent" : "is-child"}"><div class="task-row-head"><div><strong>${task.title}</strong><span>${task.priority || "normal"}${task.category ? ` · ${task.category}` : ""} · deadline ${task.deadline || "-"}${task.timeStatus ? ` · ${task.timeStatus}` : ""}${children.length ? ` · progres ${progress}%` : ""}</span></div><b class="task-status ${task.status}">${overdue ? "overdue" : task.status}</b></div><p>${task.description || ""}</p>${checklist.length ? `<div class="task-checklist">${checklist.map((item) => `<label><input type="checkbox" data-task-check="${task.id}" data-check-id="${item.id}" ${item.completed ? "checked" : ""} ${profile.role === "employee" ? "" : "disabled"} />${item.label}</label>`).join("")}</div>` : ""}${childrenMarkup}<div class="task-row-actions">${actions}</div>${subtaskForm}${finalMarkup}${profile.role !== "employee" ? reports.filter((item) => item.taskId === task.id && !item.isFinal).map((item) => reportRow(item)).join("") : ""}</article>`;
 }
 
 function reportRow(report) {
-  return `<div class="task-report-row"><span>Laporan: ${report.description}</span>${report.evidenceUrl ? `<a class="task-evidence-link" href="${report.evidenceUrl}" target="_blank" rel="noopener noreferrer">Bukti</a>` : ""}<b>${report.status}</b>${report.status === "submitted" ? `<button class="approve-registration" data-report-action="approved" data-report-id="${report.id}" data-task-id="${report.taskId}">Approve</button><button class="reject-registration" data-report-action="revision" data-report-id="${report.id}" data-task-id="${report.taskId}">Revisi</button>` : ""}</div>`;
+  return `<div class="task-report-row"><span>Laporan: ${report.description}</span>${report.evidenceUrl ? `<a class="task-evidence-link" href="${report.evidenceUrl}" target="_blank" rel="noopener noreferrer">Bukti</a>` : ""}${report.fileMetadataId ? `<button class="secondary-button" data-file-access="${report.fileMetadataId}">Buka aman</button>` : ""}<b>${report.status}</b>${report.status === "submitted" ? `<button class="approve-registration" data-report-action="approved" data-report-id="${report.id}" data-task-id="${report.taskId}">Approve</button><button class="reject-registration" data-report-action="revision" data-report-id="${report.id}" data-task-id="${report.taskId}">Revisi</button>` : ""}</div>`;
 }
 
 async function syncParentProgress(parentId, tasks, profile) {
@@ -184,11 +224,29 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
     if (!task || !file) return;
     input.disabled = true;
     try {
-      const signature = await requestUploadSignature({ taskId: task.id, fileName: file.name });
+      const resourceType = file.type.startsWith("image/") ? "image" : "raw";
+      const signature = await requestUploadSignature({ taskId: task.id, fileName: file.name, resourceType });
       const uploaded = await uploadFileToCloudinary({ file, signature, folder: signature.folder, publicId: signature.public_id });
+      let fileMetadataId = null;
+      try {
+        const metadata = await recordFileMetadata({
+          fileName: file.name,
+          resourceType,
+          format: file.name.split(".").pop() || "",
+          cloudinaryPublicId: signature.public_id,
+          secureUrl: uploaded.secure_url,
+          organizationId: task.organizationId,
+          businessId: task.businessId,
+          category: "task-evidence",
+          access: resourceType === "image" ? "public" : "private",
+          targetType: "taskReport",
+          targetId: task.id,
+        });
+        fileMetadataId = metadata?.id || null;
+      } catch (metadataError) { console.warn("[tasks] file metadata:", metadataError?.message || metadataError); }
       const description = window.prompt("Tulis laporan pekerjaan:", task.description || "");
       if (!description) return;
-      const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: uploaded.secure_url, checklist: task.checklist || [] });
+      const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: uploaded.secure_url, fileMetadataId, checklist: task.checklist || [] });
       logAuditSafe({ profile, action: "report_submitted", targetType: "taskReport", targetId: report?.id || null, businessId: task.businessId, metadata: { taskId: task.id, fileName: file.name } });
       logAuditSafe({ profile, action: "file_uploaded", targetType: "file", targetId: uploaded.public_id || null, businessId: task.businessId, metadata: { fileName: file.name, taskId: task.id } });
       const notification = { type: NOTIFICATION_TYPES.reportSubmitted, title: "Laporan tugas dikirim", body: description, organizationId: task.organizationId, businessId: task.businessId, targetType: "taskReport", targetId: report?.id || null };
@@ -197,6 +255,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
       const parent = tasks.find((item) => item.id === task.parentTaskId);
       if (parent) notifySafe({ ...notification, title: "Laporan tugas turunan dikirim", userIds: parent.assignedTo || [] });
       await updateTask(task.id, { status: "submitted" });
+      await syncTimeStatus(task.id, tasks, "submitted");
     } catch (error) { window.alert(error.message); }
     input.disabled = false;
     input.value = "";
@@ -221,6 +280,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
       });
     }
     await updateTask(button.dataset.taskId, { status: button.dataset.reportAction === "approved" ? "approved" : "revision" });
+    await syncTimeStatus(button.dataset.taskId, tasks, button.dataset.reportAction === "approved" ? "approved" : "revision");
     if (task?.parentTaskId) await syncParentProgress(task.parentTaskId, tasks, profile);
     await loadTaskList(overlay, profile, canManage);
   }));
@@ -301,6 +361,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
       });
     }
     await updateTask(button.dataset.finalTaskId, { status: button.dataset.finalAction === "approved" ? "approved" : "in-progress" });
+    await syncTimeStatus(button.dataset.finalTaskId, tasks, button.dataset.finalAction === "approved" ? "approved" : "in-progress");
     await loadTaskList(overlay, profile, canManage);
   }));
   overlay.querySelectorAll("[data-final-resubmit]").forEach((button) => button.addEventListener("click", async () => {
@@ -314,6 +375,12 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
       await updateTask(button.dataset.finalTaskId, { status: "submitted" });
       await loadTaskList(overlay, profile, canManage);
     } catch (error) { window.alert(error.message); button.disabled = false; }
+  }));
+  overlay.querySelectorAll("[data-file-access]").forEach((button) => button.addEventListener("click", async () => {
+    try {
+      const result = await requestFileAccess(button.dataset.fileAccess);
+      if (result?.url) window.open(result.url, "_blank", "noopener,noreferrer");
+    } catch (error) { window.alert(error.message); }
   }));
   overlay.querySelectorAll("[data-task-cancel]").forEach((button) => button.addEventListener("click", async () => {
     if (!window.confirm("Batalkan tugas ini?")) return;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateAttendanceTiming, getAttendanceStatus, toMinutes } from "../../src/features/schedules/schedule-calculations.js";
 import { calculateDistanceMeters, getLocationStatus, parseGoogleMapsCoordinates } from "../../src/features/attendance/gps-calculations.js";
+import { getTimeStatus } from "../../src/features/tasks/task-status.js";
 
 describe("schedule calculations", () => {
   it("converts HH:mm to minutes", () => {
@@ -34,6 +35,24 @@ describe("schedule calculations", () => {
     expect(result.actualLateMinutes).toBe(20);
     expect(result.lateAfterToleranceMinutes).toBe(5);
     expect(result.status).toBe("terlambat");
+  });
+});
+
+describe("task time status", () => {
+  const now = new Date("2026-11-22T12:00:00");
+
+  it("marks running tasks as pending or overdue", () => {
+    expect(getTimeStatus({ deadline: "2026-11-25", status: "assigned", now })).toBe("pending");
+    expect(getTimeStatus({ deadline: "2026-11-20", status: "in-progress", now })).toBe("overdue");
+  });
+
+  it("marks submitted tasks as on-time or late", () => {
+    expect(getTimeStatus({ deadline: "2026-11-25", submittedAt: "2026-11-22T09:00:00", status: "submitted", now })).toBe("on-time");
+    expect(getTimeStatus({ deadline: "2026-11-20", submittedAt: "2026-11-22T09:00:00", status: "approved", now })).toBe("late");
+  });
+
+  it("returns pending when deadline is missing", () => {
+    expect(getTimeStatus({ status: "assigned", now })).toBe("pending");
   });
 });
 

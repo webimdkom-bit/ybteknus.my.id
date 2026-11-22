@@ -21,7 +21,7 @@ import { initNotificationBadges } from "./features/notifications/notification-vi
 import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
-import { getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules } from "./lib/firestore/repositories.js";
+import { createOrganization, getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules } from "./lib/firestore/repositories.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck } from "lucide";
 
 const app = document.querySelector("#app");
@@ -80,6 +80,7 @@ function renderOwnerDashboard(profile) {
        <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>${profile?.role === "owner" ? "08" : "06"}</b></a>
         <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
         <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>10</b></a>
+        <a class="nav-item" href="#organization" data-create-organization><i data-lucide="building-2"></i><span>Organization</span><b>11</b></a>
       </nav>
 
       <div class="sidebar-bottom">
@@ -205,6 +206,17 @@ function renderOwnerDashboard(profile) {
   });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
   document.querySelector("[data-open-reports]")?.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); });
+  document.querySelector("[data-create-organization]")?.addEventListener("click", async (event) => {
+    event.preventDefault();
+    const name = window.prompt("Nama organization baru:");
+    if (!name?.trim()) return;
+    try {
+      const organizationId = crypto.randomUUID();
+      await createOrganization(organizationId, { name: name.trim(), ownerId: profile.uid, status: "active" });
+      logAuditSafe({ profile, action: "organization_created", targetType: "organization", targetId: organizationId, metadata: { name: name.trim() } });
+      window.alert(`Organization "${name.trim()}" dibuat. Akun aktif tetap menggunakan workspace saat ini.`);
+    } catch (error) { window.alert(error.message); }
+  });
   document.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
 }
 

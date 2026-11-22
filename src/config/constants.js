@@ -10,3 +10,14 @@ export const REGISTRATION_STATUSES = Object.freeze([
   "rejected",
   "suspended",
 ]);
+
+export const DEFAULT_TASK_CATEGORIES = Object.freeze([
+  "Operasional",
+  "Kebersihan",
+  "Administrasi",
+  "Pelayanan pelanggan",
+  "Inventaris",
+  "Perawatan",
+  "Proyek",
+  "Lainnya",
+]);

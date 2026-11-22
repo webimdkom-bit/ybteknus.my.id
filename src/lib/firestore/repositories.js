@@ -17,6 +17,8 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/firebase.js";
 
+const MAX_LIST = 200;
+
 export const COLLECTIONS = Object.freeze({
   USERS: "users",
   ORGANIZATIONS: "organizations",
@@ -33,6 +35,8 @@ export const COLLECTIONS = Object.freeze({
   NOTIFICATIONS: "notifications",
   ATTENDANCE_CORRECTIONS: "attendanceCorrections",
   OVERTIME: "overtime",
+  FILES: "files",
+  TASK_CATEGORIES: "taskCategories",
 });
 
 export async function getUserProfile(uid) {
@@ -343,6 +347,7 @@ export async function listAttendance(userId) {
   const result = await getDocs(query(
     collection(db, COLLECTIONS.ATTENDANCE),
     where("userId", "==", userId),
+    limit(MAX_LIST),
   ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
@@ -414,6 +419,41 @@ export async function listAuditLogs(organizationId, { businessId, max = 100 } = 
   constraints.push(limit(max));
   const result = await getDocs(query(collection(db, COLLECTIONS.AUDIT_LOGS), ...constraints));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function createFileMetadata(record) {
+  const reference = await addDoc(collection(db, COLLECTIONS.FILES), {
+    ...record,
+    createdAt: serverTimestamp(),
+  });
+  return { id: reference.id, ...record };
+}
+
+export async function listFilesForBusiness(organizationId, businessId, max = 100) {
+  const constraints = [where("organizationId", "==", organizationId)];
+  if (businessId) constraints.push(where("businessId", "==", businessId));
+  constraints.push(limit(max));
+  const result = await getDocs(query(collection(db, COLLECTIONS.FILES), ...constraints));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function listFilesForUser(userId, max = 100) {
+  const result = await getDocs(query(collection(db, COLLECTIONS.FILES), where("uploadedBy", "==", userId), limit(max)));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function deleteFileMetadata(fileId) {
+  await deleteDoc(doc(db, COLLECTIONS.FILES, fileId));
+}
+
+export async function listTaskCategories(organizationId) {
+  const result = await getDocs(query(collection(db, COLLECTIONS.TASK_CATEGORIES), where("organizationId", "==", organizationId)));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function createTaskCategory(record) {
+  const reference = await addDoc(collection(db, COLLECTIONS.TASK_CATEGORIES), { ...record, createdAt: serverTimestamp() });
+  return { id: reference.id, ...record };
 }
 
 export async function listNotifications(userId, max = 50) {
@@ -490,7 +530,7 @@ export async function createTask(task) {
 }
 
 export async function listTasksForOrganization(organizationId) {
-  const result = await getDocs(query(collection(db, COLLECTIONS.TASKS), where("organizationId", "==", organizationId)));
+  const result = await getDocs(query(collection(db, COLLECTIONS.TASKS), where("organizationId", "==", organizationId), limit(MAX_LIST)));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
@@ -499,12 +539,13 @@ export async function listTasksForBusiness(organizationId, businessId) {
     collection(db, COLLECTIONS.TASKS),
     where("organizationId", "==", organizationId),
     where("businessId", "==", businessId),
+    limit(MAX_LIST),
   ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
 export async function listTasksForUser(userId) {
-  const result = await getDocs(query(collection(db, COLLECTIONS.TASKS), where("assignedTo", "array-contains", userId)));
+  const result = await getDocs(query(collection(db, COLLECTIONS.TASKS), where("assignedTo", "array-contains", userId), limit(MAX_LIST)));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
@@ -531,7 +572,7 @@ export async function listTaskReportsForUser(userId) {
 }
 
 export async function listTaskReportsForOrganization(organizationId) {
-  const result = await getDocs(query(collection(db, COLLECTIONS.TASK_REPORTS), where("organizationId", "==", organizationId)));
+  const result = await getDocs(query(collection(db, COLLECTIONS.TASK_REPORTS), where("organizationId", "==", organizationId), limit(MAX_LIST)));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
