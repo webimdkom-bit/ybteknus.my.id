@@ -1,5 +1,5 @@
 import { getAuth } from "firebase-admin/auth";
-import { getAdminApp } from "./admin";
+import { getAdminApp } from "./admin.js";
 
 export async function verifyFirebaseToken(authorizationHeader) {
   const token = String(authorizationHeader || "")
