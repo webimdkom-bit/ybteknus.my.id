@@ -168,6 +168,20 @@ function membershipKey(userId, businessId) {
   return `${userId}_${businessId}`;
 }
 
+export async function getOrganization(organizationId) {
+  const snapshot = await getDoc(doc(db, COLLECTIONS.ORGANIZATIONS, organizationId));
+  return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+}
+
+export async function listOrganizationsForOwner(ownerId) {
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.ORGANIZATIONS),
+    where("ownerId", "==", ownerId),
+    limit(MAX_LIST),
+  ));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
 export async function createOrganization(organizationId, organization) {
   await setDoc(doc(db, COLLECTIONS.ORGANIZATIONS, organizationId), {
     ...organization,

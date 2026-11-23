@@ -20,10 +20,11 @@ import { openReportViewer } from "./features/reports/report-view.js";
 import { initNotificationBadges, stopNotificationBadges } from "./features/notifications/notification-view.js";
 import { openProfileEditor } from "./features/employees/profile-editor.js";
 import { openFileManager } from "./features/files/file-view.js";
+import { switchOrganization } from "./features/organization/organization-service.js";
 import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
-import { createOrganization, getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, listTasksForUser, updateUserProfile } from "./lib/firestore/repositories.js";
+import { createOrganization, getBusiness, getOrganization, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, listOrganizationsForOwner, listTasksForUser, updateUserProfile } from "./lib/firestore/repositories.js";
 import { formatInAppZone, getDateKey } from "./lib/utils/time.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck, FolderOpen } from "lucide";
 
@@ -83,7 +84,7 @@ function renderOwnerDashboard(profile) {
        <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>${profile?.role === "owner" ? "08" : "06"}</b></a>
         <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
         <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>10</b></a>
-        <a class="nav-item" href="#organization" data-create-organization><i data-lucide="building-2"></i><span>Organization</span><b>11</b></a>
+        <div class="org-switch-wrap"><button class="nav-item org-switch-button" type="button" data-org-switch><i data-lucide="building-2"></i><span data-org-label>Memuat organization...</span><i data-lucide="chevron-down"></i></button><div class="org-switch-menu" data-org-menu hidden></div></div>
         <a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>12</b></a>
       </nav>
 
@@ -211,18 +212,47 @@ function renderOwnerDashboard(profile) {
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
   document.querySelector("[data-open-reports]")?.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); });
   document.querySelector("[data-open-files]")?.addEventListener("click", (event) => { event.preventDefault(); openFileManager({ profile }); });
-  document.querySelector("[data-create-organization]")?.addEventListener("click", async (event) => {
-    event.preventDefault();
-    const name = window.prompt("Nama organization baru:");
-    if (!name?.trim()) return;
-    try {
-      const organizationId = crypto.randomUUID();
-      await createOrganization(organizationId, { name: name.trim(), ownerId: profile.uid, status: "active" });
-      logAuditSafe({ profile, action: "organization_created", targetType: "organization", targetId: organizationId, metadata: { name: name.trim() } });
-      window.alert(`Organization "${name.trim()}" dibuat. Akun aktif tetap menggunakan workspace saat ini.`);
-    } catch (error) { window.alert(error.message); }
-  });
+  wireOrganizationSwitcher(profile);
   document.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
+}
+
+async function wireOrganizationSwitcher(profile) {
+  const button = document.querySelector("[data-org-switch]");
+  const menu = document.querySelector("[data-org-menu]");
+  const label = document.querySelector("[data-org-label]");
+  if (!button || !menu || !label) return;
+
+  const load = async () => {
+    const [organizations, current] = await Promise.all([
+      listOrganizationsForOwner(profile.uid),
+      getOrganization(profile.organizationId),
+    ]);
+    label.textContent = current?.name || "Organization";
+    menu.innerHTML = organizations.map((organization) => `<button type="button" data-org-id="${organization.id}" class="${organization.id === profile.organizationId ? "is-active" : ""}">${escapeHtml(organization.name || "Tanpa nama")}${organization.id === profile.organizationId ? " ✓" : ""}</button>`).join("") + `<button type="button" data-org-new>+ Buat organization baru</button>`;
+
+    menu.querySelectorAll("[data-org-id]").forEach((option) => option.addEventListener("click", async () => {
+      if (option.dataset.orgId === profile.organizationId) { menu.hidden = true; return; }
+      try {
+        await switchOrganization(option.dataset.orgId);
+        window.location.reload();
+      } catch (error) { window.alert(error.message); }
+    }));
+    menu.querySelector("[data-org-new]")?.addEventListener("click", async () => {
+      const name = window.prompt("Nama organization baru:");
+      if (!name?.trim()) return;
+      try {
+        const organizationId = crypto.randomUUID();
+        await createOrganization(organizationId, { name: name.trim(), ownerId: profile.uid, status: "active" });
+        logAuditSafe({ profile, action: "organization_created", targetType: "organization", targetId: organizationId, metadata: { name: name.trim() } });
+        await switchOrganization(organizationId);
+        window.location.reload();
+      } catch (error) { window.alert(error.message); }
+    });
+  };
+
+  button.addEventListener("click", (event) => { event.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener("click", (event) => { if (!menu.contains(event.target) && event.target !== button) menu.hidden = true; });
+  await load();
 }
 
 function renderAdminDashboard(profile) {
