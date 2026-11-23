@@ -18,12 +18,14 @@ import { openTaskManager } from "./features/tasks/task-view.js";
 import { openAuditViewer } from "./features/audit-trail/audit-view.js";
 import { openReportViewer } from "./features/reports/report-view.js";
 import { initNotificationBadges, stopNotificationBadges } from "./features/notifications/notification-view.js";
+import { openProfileEditor } from "./features/employees/profile-editor.js";
+import { openFileManager } from "./features/files/file-view.js";
 import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
 import { createOrganization, getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, listTasksForUser, updateUserProfile } from "./lib/firestore/repositories.js";
 import { formatInAppZone, getDateKey } from "./lib/utils/time.js";
-import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck } from "lucide";
+import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck, FolderOpen } from "lucide";
 
 const app = document.querySelector("#app");
 const auditedLogins = new Set();
@@ -82,6 +84,7 @@ function renderOwnerDashboard(profile) {
         <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
         <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>10</b></a>
         <a class="nav-item" href="#organization" data-create-organization><i data-lucide="building-2"></i><span>Organization</span><b>11</b></a>
+        <a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>12</b></a>
       </nav>
 
       <div class="sidebar-bottom">
@@ -207,6 +210,7 @@ function renderOwnerDashboard(profile) {
   });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
   document.querySelector("[data-open-reports]")?.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); });
+  document.querySelector("[data-open-files]")?.addEventListener("click", (event) => { event.preventDefault(); openFileManager({ profile }); });
   document.querySelector("[data-create-organization]")?.addEventListener("click", async (event) => {
     event.preventDefault();
     const name = window.prompt("Nama organization baru:");
@@ -238,6 +242,7 @@ function renderAdminDashboard(profile) {
           ${can("manageTasks", "viewReports") ? `<a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>05</b></a>` : ""}
           ${can("viewReports", "reviewSubmissions") ? `<a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>06</b></a>` : ""}
           ${perms.length ? `<a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>07</b></a>` : ""}
+          ${can("viewReports", "manageTasks") ? `<a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>08</b></a>` : ""}
         </nav>
         <div class="sidebar-bottom"><div class="profile-mini"><div class="avatar">${initials(profile?.displayName)}</div><div><strong>${profile?.displayName || "User"}</strong><span>Admin · YB Tech</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
       </aside>
@@ -264,6 +269,7 @@ function renderAdminDashboard(profile) {
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
   document.querySelector("[data-open-reports]")?.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); });
+  document.querySelector("[data-open-files]")?.addEventListener("click", (event) => { event.preventDefault(); openFileManager({ profile }); });
 }
 
 function renderEmployeeDashboard(profile) {
@@ -287,7 +293,7 @@ function renderEmployeeDashboard(profile) {
           <section class="hero-row"><div><p class="eyebrow">MY WORKDAY</p><h1>Good morning,<br><em>${firstName}.</em></h1><p class="hero-copy">Lihat jadwal, absensi, dan tugas yang perlu Anda selesaikan hari ini.</p></div><button class="primary-button" data-open-attendance><i data-lucide="clock-3"></i> Buka absensi</button></section>
           <section class="employee-action-grid"><article class="employee-attendance-card metric-dark"><div><p class="eyebrow">ABSENSI HARI INI</p><h2 data-employee-attendance-status>Memuat status...</h2><p>Aktifkan GPS untuk melakukan check-in di lokasi bisnis.</p></div><button class="primary-button" data-open-attendance>Check-in sekarang <span>→</span></button></article><article class="panel employee-schedule-card"><div class="panel-heading"><div><h2>Jadwal hari ini</h2><p>Shift dan jam kerja Anda</p></div><i data-lucide="calendar-days"></i></div><div class="role-empty-state" data-employee-schedule><strong>Memuat jadwal...</strong><span>Jadwal akan muncul setelah Owner atau Admin menetapkan shift.</span></div></article></section>
           <section class="employee-task-summary" data-employee-task-summary><button type="button" data-open-tasks><span class="eyebrow">TUGAS SAYA</span><strong data-employee-task-count>0 tugas aktif</strong><span>Lihat & kerjakan tugas Anda →</span></button></section>
-          <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Riwayat absensi</h2><p>Aktivitas absensi terbaru Anda</p></div></div><div class="employee-attendance-history" data-employee-attendance-history><div class="role-empty-state"><strong>Memuat riwayat...</strong></div></div></article><aside class="quick-panel"><div class="quick-label">MY PROFILE</div><h2>${firstName}<br><em>at work.</em></h2><div class="employee-profile-summary"><strong>${profile?.displayName || "Employee"}</strong><span>${escapeHtml(profile?.email || "Email belum tersedia")}</span><span data-employee-business>Bisnis sedang dimuat...</span></div></aside></section>
+          <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Riwayat absensi</h2><p>Aktivitas absensi terbaru Anda</p></div></div><div class="employee-attendance-history" data-employee-attendance-history><div class="role-empty-state"><strong>Memuat riwayat...</strong></div></div></article><aside class="quick-panel"><div class="quick-label">MY PROFILE</div><h2>${firstName}<br><em>at work.</em></h2><div class="employee-profile-summary"><strong>${profile?.displayName || "Employee"}</strong><span>${escapeHtml(profile?.email || "Email belum tersedia")}</span><span data-employee-business>Bisnis sedang dimuat...</span><button class="secondary-button" data-open-profile style="margin-top:10px">Edit profil</button></div></aside></section>
         </main>
       </div>
     </div>
@@ -298,6 +304,7 @@ function renderEmployeeDashboard(profile) {
   document.querySelectorAll("[data-open-attendance]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openAttendancePanel({ profile }); }));
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
+  document.querySelector("[data-open-profile]")?.addEventListener("click", (event) => { event.preventDefault(); openProfileEditor(profile); });
   loadEmployeeDashboardData(profile);
 }
 
@@ -454,7 +461,7 @@ function wireDashboardChrome() {
 }
 
 function renderDashboardIcons() {
-  createIcons({ icons: { Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck } });
+  createIcons({ icons: { Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck, FolderOpen } });
 }
 
 async function wireBusinessSwitcher(profile, onScopeChange) {

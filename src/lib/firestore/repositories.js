@@ -551,12 +551,12 @@ export async function listTasksForBusiness(organizationId, businessId) {
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
-export async function listTasksForUser(userId) {
+export async function listTasksForUser(userId, max = MAX_LIST) {
   const result = await getDocs(query(
     collection(db, COLLECTIONS.TASKS),
     where("assignedTo", "array-contains", userId),
     orderBy("createdAt", "desc"),
-    limit(MAX_LIST),
+    limit(max),
   ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }

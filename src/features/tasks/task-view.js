@@ -28,12 +28,14 @@ import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-se
 export async function openTaskManager({ profile }) {
   const overlay = document.createElement("div");
   overlay.className = "task-overlay";
-  overlay.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><div class="task-modal-head"><div><p class="eyebrow">WORK MANAGEMENT</p><h2 id="task-title">${profile.role === "employee" ? "Tugas saya" : "Task management"}</h2><p>${profile.role === "employee" ? "Kerjakan tugas dan kirim laporan pekerjaan Anda." : "Buat, delegasikan, dan pantau tugas bertingkat."}</p></div><button class="icon-button task-close" aria-label="Tutup">×</button></div><div class="task-layout">${profile.role === "employee" ? "" : taskFormMarkup()}<div class="task-list-wrap"><div class="task-list-heading"><h3>Daftar tugas</h3><span class="task-count">0</span></div><div class="task-list"><p class="task-empty">Memuat tugas...</p></div></div></div></section>`;
+  overlay.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><div class="task-modal-head"><div><p class="eyebrow">WORK MANAGEMENT</p><h2 id="task-title">${profile.role === "employee" ? "Tugas saya" : "Task management"}</h2><p>${profile.role === "employee" ? "Kerjakan tugas dan kirim laporan pekerjaan Anda." : "Buat, delegasikan, dan pantau tugas bertingkat."}</p></div><button class="icon-button task-close" aria-label="Tutup">×</button></div><div class="task-layout">${profile.role === "employee" ? "" : taskFormMarkup()}<div class="task-list-wrap"><div class="task-list-heading"><h3>Daftar tugas</h3><span class="task-count">0</span></div><div class="task-list"><p class="task-empty">Memuat tugas...</p></div><button class="secondary-button task-load-more" type="button" hidden>Muat lebih banyak</button></div></div></section>`;
   document.body.append(overlay);
   let stopTaskWatch = null;
   const close = () => { stopTaskWatch?.(); overlay.remove(); };
   overlay.querySelector(".task-close").addEventListener("click", close);
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+
+  let taskLimit = 200;
 
   let memberships = [];
   if (profile.role === "admin") {
@@ -42,11 +44,17 @@ export async function openTaskManager({ profile }) {
   }
   const canManage = (businessId) => profile.role === "owner" || memberships.some((membership) => membership.businessId === businessId && (membership.permissions || []).includes("manageTasks"));
 
+  const loadMoreButton = overlay.querySelector(".task-load-more");
+  loadMoreButton.addEventListener("click", async () => {
+    taskLimit += 200;
+    await loadTaskList(overlay, profile, canManage, taskLimit);
+  });
+
   if (profile.role !== "employee") await setupTaskForm(overlay, profile, canManage);
   if (profile.role === "employee") {
     stopTaskWatch = watchTasksForUser(profile.uid, (tasks) => renderTaskList(overlay, profile, tasks, [], canManage));
   }
-  await loadTaskList(overlay, profile, canManage);
+  await loadTaskList(overlay, profile, canManage, taskLimit);
 }
 
 function taskFormMarkup() {
@@ -157,11 +165,12 @@ function renderTaskList(overlay, profile, tasks, reports, canManage) {
   bindTaskActions(overlay, profile, tasks, reports, canManage);
 }
 
-async function loadTaskList(overlay, profile, canManage) {
+async function loadTaskList(overlay, profile, canManage, max = 200) {
   const list = overlay.querySelector(".task-list");
+  const loadMoreButton = overlay.querySelector(".task-load-more");
   try {
     const tasks = profile.role === "employee"
-      ? await listTasksForUser(profile.uid)
+      ? await listTasksForUser(profile.uid, max)
       : profile.role === "owner"
         ? await listTasksForOrganization(profile.organizationId)
         : (await Promise.all((profile.businessIds || []).map((businessId) => listTasksForBusiness(profile.organizationId, businessId)))).flat();
@@ -171,7 +180,8 @@ async function loadTaskList(overlay, profile, canManage) {
         ? (await Promise.all((profile.businessIds || []).map((businessId) => listTaskReportsForBusiness(profile.organizationId, businessId)))).flat()
         : await Promise.resolve([]);
     renderTaskList(overlay, profile, tasks, reports, canManage);
-  } catch (error) { list.innerHTML = `<p class="task-error">${error.message}</p>`; }
+    if (loadMoreButton) loadMoreButton.hidden = tasks.length < max;
+  } catch (error) { list.innerHTML = `<p class="task-error">${escapeHtml(error.message)}</p>`; }
 }
 
 async function syncTimeStatus(taskId, tasks, status) {

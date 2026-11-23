@@ -6,7 +6,7 @@ const apiDir = fileURLToPath(new URL("../../api/", import.meta.url));
 const handlers = readdirSync(apiDir).filter((name) => name.endsWith(".js"));
 
 describe("Vercel API handlers", () => {
-  it("has all 8 endpoints", () => {
+  it("has all 9 endpoints", () => {
     expect(handlers.sort()).toEqual([
       "audit-log.js",
       "file-access.js",
@@ -15,6 +15,7 @@ describe("Vercel API handlers", () => {
       "file-upload.js",
       "health.js",
       "notify.js",
+      "profile-upload.js",
       "provision-user.js",
     ]);
   });

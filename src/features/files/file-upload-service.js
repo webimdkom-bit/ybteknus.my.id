@@ -25,6 +25,10 @@ export async function requestUploadSignature({ taskId, fileName, resourceType })
   return post("/api/file-upload", { taskId, fileName, resourceType });
 }
 
+export async function requestProfileUploadSignature(fileName) {
+  return post("/api/profile-upload", { fileName });
+}
+
 export function recordFileMetadata(payload) {
   return post("/api/file-metadata", payload);
 }
