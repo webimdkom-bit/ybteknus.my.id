@@ -138,3 +138,4 @@ h1 em, .quick-panel em { color: #75931d; font-family: "Bebas Neue", sans-serif; 
   .report-modal, .task-modal, .audit-modal { padding-left: 13px; padding-right: 13px; }
 }
 .employee-task-summary { margin-bottom: 20px; }.employee-task-summary button { width: 100%; display: grid; gap: 4px; text-align: left; padding: 20px 22px; background: #263538; color: #f4f6f1; }.employee-task-summary strong { font-family: "Bebas Neue"; font-size: 26px; font-weight: 400; letter-spacing: .02em; }.employee-task-summary button > span:last-child { color: #bddc4a; font-size: 10px; }
+.task-instructions, .task-requirements { color: #7a8785 !important; font-size: 9px !important; margin: 6px 0 !important; line-height: 1.5 !important; }.task-instructions strong { color: #526c15; }.task-requirements a { color: #728c1d; text-decoration: underline; }

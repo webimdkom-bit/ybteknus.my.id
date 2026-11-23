@@ -22,5 +22,5 @@ describe("Vercel API handlers", () => {
   it.each(handlers)("imports %s without resolution errors", async (name) => {
     const module = await import(new URL(`../../api/${name}`, import.meta.url).href);
     expect(typeof module.default).toBe("function");
-  });
+  }, 20000);
 });

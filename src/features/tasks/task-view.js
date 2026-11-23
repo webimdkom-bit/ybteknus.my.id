@@ -50,7 +50,7 @@ export async function openTaskManager({ profile }) {
 }
 
 function taskFormMarkup() {
-  return `<form class="task-form"><h3>Buat tugas</h3><div class="field"><label for="task-business">Bisnis</label><select id="task-business" name="businessId" required><option value="">Memuat bisnis...</option></select></div><div class="field"><label>Penerima <span>(bisa lebih dari satu)</span></label><div class="task-assignee-list" id="task-assignees"><p class="task-empty">Memuat penerima...</p></div></div><div class="field"><label for="task-category">Kategori</label><div class="task-category-row"><select id="task-category" name="category">${DEFAULT_TASK_CATEGORIES.map((category) => `<option>${category}</option>`).join("")}</select><button class="secondary-button" type="button" data-add-category hidden>Kategori baru</button></div></div><div class="field"><label for="task-name">Judul tugas</label><input id="task-name" name="title" placeholder="Contoh: Inventory check" required /></div><div class="field"><label for="task-description">Deskripsi</label><textarea id="task-description" name="description" rows="3" required></textarea></div><div class="task-form-grid"><div class="field"><label for="task-deadline">Deadline</label><input id="task-deadline" name="deadline" type="date" required /></div><div class="field"><label for="task-priority">Prioritas</label><select id="task-priority" name="priority"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select></div></div><div class="field"><label for="task-checklist">Checklist <span>(satu item per baris)</span></label><textarea id="task-checklist" name="checklist" rows="3" placeholder="Periksa stok\nFoto rak"></textarea></div><p class="task-message" role="status"></p><p class="task-error" role="alert"></p><button class="primary-button" type="submit">Buat tugas <span>→</span></button></form>`;
+  return `<form class="task-form"><h3>Buat tugas</h3><div class="field"><label for="task-business">Bisnis</label><select id="task-business" name="businessId" required><option value="">Memuat bisnis...</option></select></div><div class="field"><label>Penerima <span>(bisa lebih dari satu)</span></label><div class="task-assignee-list" id="task-assignees"><p class="task-empty">Memuat penerima...</p></div></div><div class="field"><label for="task-category">Kategori</label><div class="task-category-row"><select id="task-category" name="category">${DEFAULT_TASK_CATEGORIES.map((category) => `<option>${category}</option>`).join("")}</select><button class="secondary-button" type="button" data-add-category hidden>Kategori baru</button></div></div><div class="field"><label for="task-name">Judul tugas</label><input id="task-name" name="title" placeholder="Contoh: Inventory check" required /></div><div class="field"><label for="task-description">Deskripsi</label><textarea id="task-description" name="description" rows="3" required></textarea></div><div class="field"><label for="task-instructions">Instruksi kerja <span>(opsional)</span></label><textarea id="task-instructions" name="instructions" rows="2" placeholder="Langkah-langkah penting"></textarea></div><div class="task-form-grid"><div class="field"><label for="task-report-format">Format laporan</label><select id="task-report-format" name="reportFormat"><option value="written">Laporan tertulis</option><option value="checklist">Checklist</option><option value="photo">Bukti foto</option><option value="document">Bukti dokumen</option><option value="mixed">Kombinasi</option></select></div><div class="field"><label for="task-evidence-required">Persyaratan bukti</label><select id="task-evidence-required" name="evidenceRequired"><option value="none">Tidak wajib</option><option value="photo">Foto wajib</option><option value="document">Dokumen wajib</option><option value="either">Foto atau dokumen</option></select></div></div><div class="field"><label for="task-attachment">Lampiran URL <span>(opsional)</span></label><input id="task-attachment" name="attachmentUrl" type="url" placeholder="https://..." /></div><div class="task-form-grid"><div class="field"><label for="task-deadline">Deadline</label><input id="task-deadline" name="deadline" type="date" required /></div><div class="field"><label for="task-priority">Prioritas</label><select id="task-priority" name="priority"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select></div></div><div class="field"><label for="task-checklist">Checklist <span>(satu item per baris)</span></label><textarea id="task-checklist" name="checklist" rows="3" placeholder="Periksa stok\nFoto rak"></textarea></div><p class="task-message" role="status"></p><p class="task-error" role="alert"></p><button class="primary-button" type="submit">Buat tugas <span>→</span></button></form>`;
 }
 
 async function setupTaskForm(overlay, profile, canManage) {
@@ -113,6 +113,7 @@ async function setupTaskForm(overlay, profile, canManage) {
     if (assignedTo.some((id) => !validAssigneeIds.has(id))) { error.textContent = "Penerima tidak valid atau tidak aktif. Pilih ulang penerima."; return; }
     submit.disabled = true;
     try {
+      const masterChecklist = data.checklist.split("\n").map((label, index) => ({ id: `item-${index + 1}`, label: label.trim(), completed: false })).filter((item) => item.label);
       const task = await createTask({
         organizationId: profile.organizationId,
         businessId: data.businessId,
@@ -121,13 +122,19 @@ async function setupTaskForm(overlay, profile, canManage) {
         deadline: data.deadline,
         priority: data.priority,
         category: data.category,
+        instructions: data.instructions.trim(),
+        reportFormat: data.reportFormat,
+        evidenceRequired: data.evidenceRequired,
+        attachmentUrl: data.attachmentUrl?.trim() || "",
         assignedTo,
-        createdBy: profile.uid,
         assignedBy: profile.uid,
+        createdBy: profile.uid,
         parentTaskId: null,
         rootTaskId: null,
         timeStatus: getTimeStatus({ deadline: data.deadline, status: "assigned" }),
-        checklist: data.checklist.split("\n").map((label, index) => ({ id: `item-${index + 1}`, label: label.trim(), completed: false })).filter((item) => item.label),
+        checklist: masterChecklist,
+        checklistByUser: Object.fromEntries(assignedTo.map((id) => [id, masterChecklist.map((item) => ({ ...item, completed: false }))])),
+        progressByUser: Object.fromEntries(assignedTo.map((id) => [id, 0])),
       });
       logAuditSafe({ profile, action: "task_created", targetType: "task", targetId: task?.id || null, businessId: data.businessId, metadata: { title: data.title.trim(), assignedTo, priority: data.priority, category: data.category } });
       notifySafe({ type: NOTIFICATION_TYPES.taskCreated, title: "Tugas baru", body: data.title.trim(), organizationId: profile.organizationId, businessId: data.businessId, targetType: "task", targetId: task?.id || null, userIds: assignedTo });
@@ -183,7 +190,9 @@ function parentProgress(parentId, tasks) {
 
 function taskRow(task, tasks, reports, profile, canManage) {
   const overdue = task.deadline && task.status !== "approved" && task.deadline < getDateKey();
-  const checklist = task.checklist || [];
+  const checklist = profile.role === "employee"
+    ? (task.checklistByUser?.[profile.uid] || task.checklist || [])
+    : (task.checklist || []);
   const children = tasks.filter((item) => item.parentTaskId === task.id);
   const approvedChildren = children.filter((item) => item.status === "approved").length;
   const progress = children.length ? parentProgress(task.id, tasks) : Number(task.progress || 0);
@@ -202,7 +211,7 @@ function taskRow(task, tasks, reports, profile, canManage) {
 
   const finalMarkup = finalReport ? `<div class="task-final-report"><div><strong>Laporan akhir${finalReport.userId === profile.uid ? " Anda" : ""}</strong><span>${escapeHtml(finalReport.description || "-")}</span></div><b class="task-status ${finalReport.status}">${finalReport.status}</b>${profile.role === "owner" && finalReport.status === "submitted" ? `<button class="approve-registration" data-final-action="approved" data-final-report-id="${finalReport.id}" data-final-task-id="${task.id}">Setujui akhir</button><button class="reject-registration" data-final-action="revision" data-final-report-id="${finalReport.id}" data-final-task-id="${task.id}">Revisi akhir</button>` : ""}${finalReport.userId === profile.uid && finalReport.status === "revision" ? `<button class="secondary-button" data-final-resubmit="${finalReport.id}" data-final-task-id="${task.id}">Kirim ulang</button>` : ""}</div>` : "";
 
-  return `<article class="task-row ${overdue ? "is-overdue" : ""} ${isRoot ? "is-parent" : "is-child"}"><div class="task-row-head"><div><strong>${escapeHtml(task.title)}</strong><span>${task.priority || "normal"}${task.category ? ` · ${escapeHtml(task.category)}` : ""} · deadline ${escapeHtml(task.deadline || "-")}${task.timeStatus ? ` · ${task.timeStatus}` : ""}${children.length ? ` · progres ${progress}%` : ""}</span></div><b class="task-status ${task.status}">${overdue ? "overdue" : task.status}</b></div><p>${escapeHtml(task.description || "")}</p>${checklist.length ? `<div class="task-checklist">${checklist.map((item) => `<label><input type="checkbox" data-task-check="${task.id}" data-check-id="${item.id}" ${item.completed ? "checked" : ""} ${profile.role === "employee" ? "" : "disabled"} />${escapeHtml(item.label)}</label>`).join("")}</div>` : ""}${childrenMarkup}<div class="task-row-actions">${actions}</div>${subtaskForm}${finalMarkup}${profile.role !== "employee" ? reports.filter((item) => item.taskId === task.id && !item.isFinal).map((item) => reportRow(item)).join("") : ""}</article>`;
+  return `<article class="task-row ${overdue ? "is-overdue" : ""} ${isRoot ? "is-parent" : "is-child"}"><div class="task-row-head"><div><strong>${escapeHtml(task.title)}</strong><span>${task.priority || "normal"}${task.category ? ` · ${escapeHtml(task.category)}` : ""} · deadline ${escapeHtml(task.deadline || "-")}${task.timeStatus ? ` · ${task.timeStatus}` : ""}${children.length ? ` · progres ${progress}%` : ""}</span></div><b class="task-status ${task.status}">${overdue ? "overdue" : task.status}</b></div><p>${escapeHtml(task.description || "")}</p>${task.instructions ? `<p class="task-instructions"><strong>Instruksi:</strong> ${escapeHtml(task.instructions)}</p>` : ""}${(task.reportFormat || task.evidenceRequired || task.attachmentUrl) ? `<p class="task-requirements">${task.reportFormat ? `Format: ${escapeHtml(task.reportFormat)}` : ""}${task.evidenceRequired && task.evidenceRequired !== "none" ? ` · Bukti: ${escapeHtml(task.evidenceRequired)}` : ""}${safeUrl(task.attachmentUrl) ? ` · <a href="${safeUrl(task.attachmentUrl)}" target="_blank" rel="noopener noreferrer">Lampiran</a>` : ""}</p>` : ""}${checklist.length ? `<div class="task-checklist">${checklist.map((item) => `<label><input type="checkbox" data-task-check="${task.id}" data-check-id="${item.id}" ${item.completed ? "checked" : ""} ${profile.role === "employee" ? "" : "disabled"} />${escapeHtml(item.label)}</label>`).join("")}</div>` : ""}${childrenMarkup}<div class="task-row-actions">${actions}</div>${subtaskForm}${finalMarkup}${profile.role !== "employee" ? reports.filter((item) => item.taskId === task.id && !item.isFinal).map((item) => reportRow(item)).join("") : ""}</article>`;
 }
 
 function reportRow(report) {
@@ -224,10 +233,19 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
   }));
   overlay.querySelectorAll("[data-task-check]").forEach((checkbox) => checkbox.addEventListener("change", async () => {
     const task = tasks.find((item) => item.id === checkbox.dataset.taskCheck);
-    const checklist = (task?.checklist || []).map((item) => item.id === checkbox.dataset.checkId ? { ...item, completed: checkbox.checked } : item);
+    const source = task?.checklistByUser?.[profile.uid] || task?.checklist || [];
+    const checklist = source.map((item) => item.id === checkbox.dataset.checkId ? { ...item, completed: checkbox.checked } : item);
     const completed = checklist.filter((item) => item.completed).length;
     const status = completed === checklist.length && checklist.length ? "submitted" : "in-progress";
-    await updateTask(task.id, { checklist, progress: checklist.length ? Math.round(completed / checklist.length * 100) : 0, status });
+    const changes = profile.role === "employee"
+      ? {
+        checklistByUser: { ...(task.checklistByUser || {}), [profile.uid]: checklist },
+        progressByUser: { ...(task.progressByUser || {}), [profile.uid]: checklist.length ? Math.round(completed / checklist.length * 100) : 0 },
+        progress: checklist.length ? Math.round(completed / checklist.length * 100) : 0,
+        status,
+      }
+      : { checklist, progress: checklist.length ? Math.round(completed / checklist.length * 100) : 0, status };
+    await updateTask(task.id, changes);
     if (task.parentTaskId) await syncParentProgress(task.parentTaskId, tasks, profile);
     await loadTaskList(overlay, profile, canManage);
   }));
