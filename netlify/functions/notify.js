@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "./_shared/admin";
 import { verifyFirebaseToken } from "./_shared/auth";
+import { jakartaNow } from "./_shared/time";
 
 function json(statusCode, payload) {
   return { statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) };
@@ -86,7 +87,7 @@ export const handler = async (event) => {
       actorId: uid,
       actorName: actor.displayName || actor.email || "",
       read: false,
-      createdAt: new Date().toISOString(),
+      createdAt: jakartaNow(),
     });
     created.push(reference.id);
   }

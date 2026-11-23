@@ -19,6 +19,7 @@ import {
 import { DEFAULT_TASK_CATEGORIES } from "../../config/constants.js";
 import { getTimeStatus } from "./task-status.js";
 import { escapeHtml, safeUrl } from "../../lib/utils/html.js";
+import { getDateKey, getJakartaISO } from "../../lib/utils/time.js";
 import { recordFileMetadata, requestFileAccess, requestUploadSignature, uploadFileToCloudinary } from "../files/file-upload-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
@@ -154,7 +155,7 @@ async function syncTimeStatus(taskId, tasks, status) {
   const task = tasks.find((item) => item.id === taskId);
   if (!task) return;
   await updateTask(taskId, {
-    timeStatus: getTimeStatus({ deadline: task.deadline, submittedAt: new Date().toISOString(), status }),
+    timeStatus: getTimeStatus({ deadline: task.deadline, submittedAt: getJakartaISO(), status }),
   });
 }
 
@@ -165,7 +166,7 @@ function parentProgress(parentId, tasks) {
 }
 
 function taskRow(task, tasks, reports, profile, canManage) {
-  const overdue = task.deadline && task.status !== "approved" && task.deadline < new Date().toISOString().slice(0, 10);
+  const overdue = task.deadline && task.status !== "approved" && task.deadline < getDateKey();
   const checklist = task.checklist || [];
   const children = tasks.filter((item) => item.parentTaskId === task.id);
   const approvedChildren = children.filter((item) => item.status === "approved").length;
@@ -264,7 +265,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
   }));
   overlay.querySelectorAll("[data-report-action]").forEach((button) => button.addEventListener("click", async () => {
     const note = window.prompt("Catatan review (opsional):", "") || "";
-    await reviewTaskReport(button.dataset.reportId, { status: button.dataset.reportAction, reviewedBy: profile.uid, reviewNote: note, reviewedAt: new Date().toISOString() });
+    await reviewTaskReport(button.dataset.reportId, { status: button.dataset.reportAction, reviewedBy: profile.uid, reviewNote: note, reviewedAt: getJakartaISO() });
     const report = reports.find((item) => item.id === button.dataset.reportId);
     const task = tasks.find((item) => item.id === button.dataset.taskId);
     logAuditSafe({ profile, action: button.dataset.reportAction === "approved" ? "report_approved" : "report_revision_requested", targetType: "taskReport", targetId: button.dataset.reportId, businessId: task?.businessId || report?.businessId || null, metadata: { taskId: button.dataset.taskId, reviewNote: note } });
@@ -345,7 +346,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
   }));
   overlay.querySelectorAll("[data-final-action]").forEach((button) => button.addEventListener("click", async () => {
     const note = window.prompt("Catatan review akhir (opsional):", "") || "";
-    await reviewTaskReport(button.dataset.finalReportId, { status: button.dataset.finalAction, reviewedBy: profile.uid, reviewNote: note, reviewedAt: new Date().toISOString() });
+    await reviewTaskReport(button.dataset.finalReportId, { status: button.dataset.finalAction, reviewedBy: profile.uid, reviewNote: note, reviewedAt: getJakartaISO() });
     const task = tasks.find((item) => item.id === button.dataset.finalTaskId);
     logAuditSafe({ profile, action: button.dataset.finalAction === "approved" ? "final_report_approved" : "final_report_revision_requested", targetType: "taskReport", targetId: button.dataset.finalReportId, businessId: task?.businessId || null, metadata: { taskId: button.dataset.finalTaskId, reviewNote: note } });
     const finalReport = reports.find((item) => item.id === button.dataset.finalReportId);
@@ -371,7 +372,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage) {
     if (!description) return;
     button.disabled = true;
     try {
-      await reviewTaskReport(report.id, { status: "submitted", description, reviewedAt: new Date().toISOString() });
+      await reviewTaskReport(report.id, { status: "submitted", description, reviewedAt: getJakartaISO() });
       logAuditSafe({ profile, action: "final_report_resubmitted", targetType: "taskReport", targetId: report.id, metadata: { taskId: button.dataset.finalTaskId } });
       await updateTask(button.dataset.finalTaskId, { status: "submitted" });
       await loadTaskList(overlay, profile, canManage);

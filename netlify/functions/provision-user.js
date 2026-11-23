@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "./_shared/admin";
 import { verifyFirebaseToken } from "./_shared/auth";
 import { ADMIN_PERMISSIONS } from "./_shared/permissions";
+import { jakartaNow } from "./_shared/time";
 
 function json(statusCode, payload) {
   return { statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) };
@@ -62,8 +63,8 @@ export const handler = async (event) => {
     organizationId,
     businessIds: role === "admin" ? businessIds : [],
     permissions: role === "admin" ? [...new Set(access.flatMap((item) => item.permissions || []))] : [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: jakartaNow(),
+    updatedAt: jakartaNow(),
   });
   if (role === "admin") {
     const batch = db.batch();
@@ -76,7 +77,7 @@ export const handler = async (event) => {
         businessId,
         role: "admin",
         permissions: Array.isArray(item.permissions) ? item.permissions : [],
-        createdAt: new Date().toISOString(),
+        createdAt: jakartaNow(),
       });
     });
     await batch.commit();

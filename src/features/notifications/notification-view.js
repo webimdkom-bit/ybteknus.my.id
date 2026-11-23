@@ -1,4 +1,5 @@
 import { markAllNotificationsRead, markNotificationRead, watchNotifications } from "../../lib/firestore/repositories.js";
+import { formatInAppZone } from "../../lib/utils/time.js";
 
 let unsubscribe = null;
 
@@ -64,5 +65,5 @@ function escapeHtml(value) {
 
 function formatTime(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return formatInAppZone(value, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }

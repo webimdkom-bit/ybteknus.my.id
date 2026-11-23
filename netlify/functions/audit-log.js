@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "./_shared/admin";
 import { verifyFirebaseToken } from "./_shared/auth";
+import { jakartaNow } from "./_shared/time";
 
 const ALLOWED_ACTIONS = new Set([
   "login", "logout",
@@ -84,7 +85,7 @@ export const handler = async (event) => {
     targetType,
     targetId: targetId || null,
     metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : {},
-    timestamp: new Date().toISOString(),
+    timestamp: jakartaNow(),
   };
   const reference = await db.collection("auditLogs").add(record);
 

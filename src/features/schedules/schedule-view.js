@@ -2,6 +2,7 @@ import { getBusiness, listBusinessesForOrganization, listEmployeesForBusiness } 
 import { addShift, assignShift, listShifts } from "./schedule-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
+import { getDateKey } from "../../lib/utils/time.js";
 
 export async function openScheduleManager({ profile, onClose }) {
   const organizationId = profile.organizationId;
@@ -47,7 +48,7 @@ export async function openScheduleManager({ profile, onClose }) {
   const shiftSelect = overlay.querySelector("#assign-shift");
   const dateInput = overlay.querySelector("#assign-date");
   const effectiveInput = overlay.querySelector("#assign-effective");
-  const today = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
+  const today = getDateKey();
   dateInput.value = today;
   effectiveInput.value = today;
 

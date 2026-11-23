@@ -1,4 +1,5 @@
 import { auth } from "../../lib/firebase/firebase.js";
+import { getDateKey } from "../../lib/utils/time.js";
 import {
   listTasksForBusiness,
   listTasksForOrganization,
@@ -41,13 +42,9 @@ export function notifySafe(payload) {
   notify(payload).catch((error) => console.warn("[notify]", error?.message || error));
 }
 
-function dateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
 function daysUntil(deadline) {
-  const today = new Date(`${dateKey()}T00:00:00`);
-  const target = new Date(`${deadline}T00:00:00`);
+  const today = new Date(`${getDateKey()}T00:00:00+07:00`);
+  const target = new Date(`${deadline}T00:00:00+07:00`);
   return Math.round((target - today) / 86400000);
 }
 
@@ -63,7 +60,7 @@ export async function syncDeadlineNotifications(profile) {
     console.warn("[notify] deadline sync:", error?.message || error);
     return;
   }
-  const today = dateKey();
+  const today = getDateKey();
   tasks.forEach((task) => {
     if (!task.deadline || ["approved", "cancelled"].includes(task.status)) return;
     const remaining = daysUntil(task.deadline);

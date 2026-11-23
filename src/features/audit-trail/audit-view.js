@@ -1,4 +1,5 @@
 import { listAuditLogs } from "../../lib/firestore/repositories.js";
+import { formatInAppZone } from "../../lib/utils/time.js";
 
 export async function openAuditViewer({ profile }) {
   const overlay = document.createElement("div");
@@ -26,5 +27,5 @@ function escapeHtml(value) {
 
 function formatAuditTime(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatInAppZone(value, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }

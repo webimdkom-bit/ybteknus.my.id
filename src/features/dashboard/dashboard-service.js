@@ -15,18 +15,19 @@ import {
   listTasksForBusiness,
   listTasksForOrganization,
 } from "../../lib/firestore/repositories.js";
+import { formatInAppZone, getDateKey } from "../../lib/utils/time.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LATE_STATUSES = new Set(["terlambat", "terlambat dan pulang lebih awal"]);
 const PRESENT_STATUSES = new Set(["hadir", "tercatat", "terlambat", "pulang lebih awal", "terlambat dan pulang lebih awal"]);
 
 export function toDateKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return getDateKey(date);
 }
 
 function shiftDateKey(dateKey, days) {
   const [year, month, day] = String(dateKey).split("-").map(Number);
-  return toDateKey(new Date(year, month - 1, day + days));
+  return getDateKey(new Date(Date.UTC(year, month - 1, day + days)));
 }
 
 function toMillis(value) {
@@ -165,7 +166,7 @@ function buildRecentActivity({ tasks, reports, requests, registrations, business
     .map(({ title, detail, status, time, businessId }) => ({
       title,
       detail: businessNames.get(businessId) ? `${detail} · ${businessNames.get(businessId)}` : detail,
-      time: new Date(time).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+      time: formatInAppZone(time, { hour: "2-digit", minute: "2-digit" }),
       status,
     }));
 }
@@ -179,7 +180,7 @@ function buildViewModel({ businesses, employees, attendanceToday, attendanceWeek
   const pendingRegistrations = registrations.length;
 
   return {
-    generatedAt: new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+    generatedAt: formatInAppZone(new Date(), { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
     metrics: {
       attendancePercent: attendance.percent,
       attendanceHadir: attendance.hadir,

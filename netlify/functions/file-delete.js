@@ -3,6 +3,7 @@ import { v2 as cloudinary } from "cloudinary";
 import { getAdminApp } from "./_shared/admin";
 import { canAccessFile } from "./_shared/access";
 import { verifyFirebaseToken } from "./_shared/auth";
+import { jakartaNow } from "./_shared/time";
 
 function json(statusCode, payload) {
   return { statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) };
@@ -37,6 +38,6 @@ export const handler = async (event) => {
 
   configureCloudinary();
   const result = await cloudinary.v2.uploader.destroy(file.cloudinaryPublicId);
-  await db.collection("files").doc(fileId).update({ status: "deleted", deletedBy: uid, deletedAt: new Date().toISOString() });
+  await db.collection("files").doc(fileId).update({ status: "deleted", deletedBy: uid, deletedAt: jakartaNow() });
   return json(200, { result: result.result, fileId });
 };

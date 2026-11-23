@@ -22,6 +22,7 @@ import { syncDeadlineNotifications } from "./features/notifications/notification
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
 import { createOrganization, getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, updateUserProfile } from "./lib/firestore/repositories.js";
+import { formatInAppZone, getDateKey } from "./lib/utils/time.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck } from "lucide";
 
 const app = document.querySelector("#app");
@@ -336,7 +337,7 @@ async function loadEmployeeDashboardData(profile) {
 }
 
 function getLocalDateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return getDateKey(date);
 }
 
 function getAttendanceDate(event) {
@@ -349,7 +350,7 @@ function getAttendanceTime(event) {
 
 function formatDateLabel(value) {
   if (!value) return "Tanggal tidak tersedia";
-  return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value}T00:00:00`));
+  return formatInAppZone(`${value}T00:00:00+07:00`, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function escapeHtml(value) {

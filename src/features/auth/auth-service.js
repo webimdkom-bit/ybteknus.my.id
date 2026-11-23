@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../../lib/firebase/firebase.js";
 import { createRegistration, createUserProfile, getUserProfile } from "../../lib/firestore/repositories.js";
+import { getDateKey } from "../../lib/utils/time.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 
 export function subscribeToAuth(callback) {
@@ -24,7 +25,7 @@ export async function registerEmployee({ name, email, password, business, phone,
   const result = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
   await updateProfile(result.user, { displayName: name, photoURL: photoURL?.trim() || null });
 
-  const joinedAt = new Date().toISOString().slice(0, 10);
+  const joinedAt = getDateKey();
   await createUserProfile(result.user.uid, {
     displayName: name,
     email: normalizedEmail,

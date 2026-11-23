@@ -11,6 +11,7 @@ import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-se
 import { applyAttendanceCorrection } from "../attendance-corrections/correction-service.js";
 import { listAttendanceCorrectionsForUser, createOvertime, listOvertimeForUser, updateOvertime } from "../../lib/firestore/repositories.js";
 import { escapeHtml } from "../../lib/utils/html.js";
+import { getJakartaISO } from "../../lib/utils/time.js";
 
 const REQUEST_TYPES = Object.freeze([
   ["permission", "Izin"],
@@ -143,7 +144,7 @@ async function setupRequestReview(overlay, profile) {
       const reviewNote = window.prompt("Catatan review (opsional):", "");
       button.disabled = true;
       try {
-        await reviewOperationalRequest(request.id, { status: button.dataset.requestAction, reviewedBy: profile.uid, reviewedAt: new Date().toISOString(), reviewNote: reviewNote || "" });
+        await reviewOperationalRequest(request.id, { status: button.dataset.requestAction, reviewedBy: profile.uid, reviewedAt: getJakartaISO(), reviewNote: reviewNote || "" });
         if (request.type === "attendance-correction" && button.dataset.requestAction === "approved") {
           try {
             await applyAttendanceCorrection({ ...request, status: "approved" }, profile);

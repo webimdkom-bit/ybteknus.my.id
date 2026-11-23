@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "./_shared/admin";
 import { verifyFirebaseToken } from "./_shared/auth";
+import { jakartaNow } from "./_shared/time";
 
 function json(statusCode, payload) {
   return { statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) };
@@ -44,7 +45,7 @@ export const handler = async (event) => {
     targetType: body.targetType || null,
     targetId: body.targetId || null,
     status: "active",
-    createdAt: new Date().toISOString(),
+    createdAt: jakartaNow(),
   };
   const reference = await db.collection("files").add(record);
   return json(200, { id: reference.id, ...record });

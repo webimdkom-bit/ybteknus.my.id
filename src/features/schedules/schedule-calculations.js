@@ -1,3 +1,5 @@
+import { getJakartaMinutes } from "../../lib/utils/time.js";
+
 export function calculateAttendanceTiming({ scheduledStart, scheduledEnd, toleranceMinutes = 0, checkIn, checkOut, now }) {
   const start = toMinutes(scheduledStart);
   const end = toMinutes(scheduledEnd);
@@ -16,8 +18,9 @@ export function calculateAttendanceTiming({ scheduledStart, scheduledEnd, tolera
   };
 }
 
-export function getAttendanceStatus({ actualIn, actualOut, lateAfterToleranceMinutes, earlyDepartureMinutes, end, now = currentMinutes() }) {
-  if (actualIn == null) return now > end ? "alpa" : "belum lengkap";
+export function getAttendanceStatus({ actualIn, actualOut, lateAfterToleranceMinutes, earlyDepartureMinutes, end, now }) {
+  const current = now instanceof Date ? getJakartaMinutes(now) : Number.isFinite(now) ? now : currentMinutes();
+  if (actualIn == null) return current > end ? "alpa" : "belum lengkap";
   if (actualOut == null) return "belum lengkap";
   if (lateAfterToleranceMinutes > 0 && earlyDepartureMinutes > 0) return "terlambat dan pulang lebih awal";
   if (lateAfterToleranceMinutes > 0) return "terlambat";
@@ -33,6 +36,5 @@ export function toMinutes(value) {
 }
 
 function currentMinutes() {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
+  return getJakartaMinutes();
 }

@@ -1,6 +1,9 @@
 import { createAttendance, getBusiness, getShift, listAttendance, listEmployeeSchedules, listOperationalRequestsForUser, updateBusiness } from "../../lib/firestore/repositories.js";
 import { calculateDistanceMeters, getLocationStatus, parseGoogleMapsCoordinates } from "./gps-calculations.js";
 import { calculateAttendanceTiming } from "../schedules/schedule-calculations.js";
+import { APP_TIME_ZONE, getDateKey, getJakartaISO, getTimeKey } from "../../lib/utils/time.js";
+
+export { getDateKey, getTimeKey };
 
 export const DEFAULT_RADIUS_METERS = 100;
 export const MAX_ACCEPTED_ACCURACY_METERS = 150;
@@ -74,7 +77,8 @@ export async function recordGpsAttendance({ userId, organizationId, businessId, 
     scheduledStart: shift?.startTime || null,
     scheduledEnd: shift?.endTime || null,
     toleranceMinutes: shift?.toleranceMinutes || 0,
-    clientRecordedAt: now.toISOString(),
+    clientRecordedAt: getJakartaISO(now),
+    timezone: APP_TIME_ZONE,
   });
 }
 
@@ -120,14 +124,6 @@ function getEventDate(event) {
 
 function getEventTime(event) {
   return event.recordedTime || event.clientRecordedAt?.slice(11, 16) || "";
-}
-
-export function getDateKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function getTimeKey(date) {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function getCurrentPosition() {
