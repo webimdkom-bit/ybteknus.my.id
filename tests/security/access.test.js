@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { canAccessFile, isSameOrganization } from "../../netlify/functions/_shared/access.js";
+import { canAccessFile, isSameOrganization } from "../../server/shared/access.js";
 
 const rules = readFileSync(fileURLToPath(new URL("../../firestore.rules", import.meta.url)), "utf8");
 

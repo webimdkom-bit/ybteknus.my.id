@@ -6,4 +6,4 @@ Multi-tenant hierarchy:
 
 Frontend uses ES Modules. Authentication and identity use Firebase Authentication,
 operational data uses Cloud Firestore, file content uses Cloudinary, and sensitive
-server operations use Netlify Functions.
+server operations use Vercel Functions under `api/`.
