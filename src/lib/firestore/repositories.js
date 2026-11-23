@@ -9,6 +9,7 @@ import {
   getDocs,
   limit,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -76,6 +77,7 @@ export async function listEmployeesForBusiness(organizationId, businessId) {
     collection(db, COLLECTIONS.USERS),
     where("organizationId", "==", organizationId),
     where("role", "==", "employee"),
+    where("status", "==", "active"),
     where("businessIds", "array-contains", businessId),
   ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
@@ -550,8 +552,29 @@ export async function listTasksForBusiness(organizationId, businessId) {
 }
 
 export async function listTasksForUser(userId) {
-  const result = await getDocs(query(collection(db, COLLECTIONS.TASKS), where("assignedTo", "array-contains", userId), limit(MAX_LIST)));
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.TASKS),
+    where("assignedTo", "array-contains", userId),
+    orderBy("createdAt", "desc"),
+    limit(MAX_LIST),
+  ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export function watchTasksForUser(userId, callback, onError) {
+  return onSnapshot(
+    query(
+      collection(db, COLLECTIONS.TASKS),
+      where("assignedTo", "array-contains", userId),
+      orderBy("createdAt", "desc"),
+      limit(MAX_LIST),
+    ),
+    (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+    (error) => {
+      console.warn("[tasks] listener:", error?.code || error?.message || error);
+      onError?.(error);
+    },
+  );
 }
 
 export async function updateTask(taskId, changes) {

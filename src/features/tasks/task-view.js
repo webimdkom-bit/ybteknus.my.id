@@ -13,6 +13,7 @@ import {
   listTaskReportsForOrganization,
   listTaskCategories,
   createTaskCategory,
+  watchTasksForUser,
   updateTask,
   reviewTaskReport,
 } from "../../lib/firestore/repositories.js";
@@ -29,7 +30,8 @@ export async function openTaskManager({ profile }) {
   overlay.className = "task-overlay";
   overlay.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><div class="task-modal-head"><div><p class="eyebrow">WORK MANAGEMENT</p><h2 id="task-title">${profile.role === "employee" ? "Tugas saya" : "Task management"}</h2><p>${profile.role === "employee" ? "Kerjakan tugas dan kirim laporan pekerjaan Anda." : "Buat, delegasikan, dan pantau tugas bertingkat."}</p></div><button class="icon-button task-close" aria-label="Tutup">×</button></div><div class="task-layout">${profile.role === "employee" ? "" : taskFormMarkup()}<div class="task-list-wrap"><div class="task-list-heading"><h3>Daftar tugas</h3><span class="task-count">0</span></div><div class="task-list"><p class="task-empty">Memuat tugas...</p></div></div></div></section>`;
   document.body.append(overlay);
-  const close = () => overlay.remove();
+  let stopTaskWatch = null;
+  const close = () => { stopTaskWatch?.(); overlay.remove(); };
   overlay.querySelector(".task-close").addEventListener("click", close);
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
 
@@ -41,6 +43,9 @@ export async function openTaskManager({ profile }) {
   const canManage = (businessId) => profile.role === "owner" || memberships.some((membership) => membership.businessId === businessId && (membership.permissions || []).includes("manageTasks"));
 
   if (profile.role !== "employee") await setupTaskForm(overlay, profile, canManage);
+  if (profile.role === "employee") {
+    stopTaskWatch = watchTasksForUser(profile.uid, (tasks) => renderTaskList(overlay, profile, tasks, [], canManage));
+  }
   await loadTaskList(overlay, profile, canManage);
 }
 
@@ -61,14 +66,18 @@ async function setupTaskForm(overlay, profile, canManage) {
   const visibleBusinesses = (await businesses).filter(Boolean).filter((business) => business.status !== "inactive");
   businessSelect.innerHTML = visibleBusinesses.map((business) => `<option value="${business.id}">${business.name}</option>`).join("");
 
+  let validAssigneeIds = new Set();
   const loadAssignees = async () => {
     const businessId = businessSelect.value;
     if (!businessId) return;
-    const employees = await listEmployeesForBusiness(profile.organizationId, businessId);
-    const admins = profile.role === "owner" ? await listAdmins(profile.organizationId) : [];
-    const people = [...admins.filter((admin) => admin.businessIds?.includes(businessId)), ...employees];
-    assigneeList.innerHTML = people.length
-      ? people.map((person) => `<label><input type="checkbox" data-task-assignee="${person.id}" /> ${person.displayName || person.email} · ${person.role === "admin" ? "Admin" : "Employee"}</label>`).join("")
+    const [employees, admins] = await Promise.all([
+      listEmployeesForBusiness(profile.organizationId, businessId),
+      profile.role === "owner" ? listAdmins(profile.organizationId) : Promise.resolve([]),
+    ]);
+    const activePeople = [...admins.filter((admin) => admin.businessIds?.includes(businessId) && admin.status === "active"), ...employees.filter((employee) => employee.status === "active")];
+    validAssigneeIds = new Set(activePeople.map((person) => person.id));
+    assigneeList.innerHTML = activePeople.length
+      ? activePeople.map((person) => `<label><input type="checkbox" value="${person.id}" data-task-assignee="${person.id}" /> ${person.displayName || person.email} · ${person.role === "admin" ? "Admin" : "Employee"}</label>`).join("")
       : `<p class="task-empty">Belum ada penerima.</p>`;
   };
   const loadCategories = async () => {
@@ -94,13 +103,14 @@ async function setupTaskForm(overlay, profile, canManage) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form));
-    const assignedTo = [...form.querySelectorAll("[data-task-assignee]:checked")].map((input) => input.value);
+    const assignedTo = [...form.querySelectorAll("[data-task-assignee]:checked")].map((input) => input.dataset.taskAssignee || input.value);
     const error = form.querySelector(".task-error");
     const message = form.querySelector(".task-message");
     const submit = form.querySelector("button[type=submit]");
     error.textContent = "";
     message.textContent = "";
     if (!assignedTo.length) { error.textContent = "Pilih minimal satu penerima."; return; }
+    if (assignedTo.some((id) => !validAssigneeIds.has(id))) { error.textContent = "Penerima tidak valid atau tidak aktif. Pilih ulang penerima."; return; }
     submit.disabled = true;
     try {
       const task = await createTask({
@@ -129,9 +139,19 @@ async function setupTaskForm(overlay, profile, canManage) {
   });
 }
 
-async function loadTaskList(overlay, profile, canManage) {
+function renderTaskList(overlay, profile, tasks, reports, canManage) {
   const list = overlay.querySelector(".task-list");
   const count = overlay.querySelector(".task-count");
+  if (!list || !count) return;
+  count.textContent = tasks.length;
+  list.innerHTML = tasks.length
+    ? tasks.map((task) => taskRow(task, tasks, reports, profile, canManage)).join("")
+    : `<div class="task-empty-state"><strong>Belum ada tugas.</strong><span>Tugas baru akan muncul di sini.</span></div>`;
+  bindTaskActions(overlay, profile, tasks, reports, canManage);
+}
+
+async function loadTaskList(overlay, profile, canManage) {
+  const list = overlay.querySelector(".task-list");
   try {
     const tasks = profile.role === "employee"
       ? await listTasksForUser(profile.uid)
@@ -143,11 +163,7 @@ async function loadTaskList(overlay, profile, canManage) {
       : profile.role === "admin"
         ? (await Promise.all((profile.businessIds || []).map((businessId) => listTaskReportsForBusiness(profile.organizationId, businessId)))).flat()
         : await Promise.resolve([]);
-    count.textContent = tasks.length;
-    list.innerHTML = tasks.length
-      ? tasks.map((task) => taskRow(task, tasks, reports, profile, canManage)).join("")
-      : `<div class="task-empty-state"><strong>Belum ada tugas.</strong><span>Tugas baru akan muncul di sini.</span></div>`;
-    bindTaskActions(overlay, profile, tasks, reports, canManage);
+    renderTaskList(overlay, profile, tasks, reports, canManage);
   } catch (error) { list.innerHTML = `<p class="task-error">${error.message}</p>`; }
 }
 

@@ -21,7 +21,7 @@ import { initNotificationBadges, stopNotificationBadges } from "./features/notif
 import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
-import { createOrganization, getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, updateUserProfile } from "./lib/firestore/repositories.js";
+import { createOrganization, getBusiness, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, listTasksForUser, updateUserProfile } from "./lib/firestore/repositories.js";
 import { formatInAppZone, getDateKey } from "./lib/utils/time.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck } from "lucide";
 
@@ -284,6 +284,7 @@ function renderEmployeeDashboard(profile) {
         <main class="dashboard role-dashboard employee-dashboard" id="overview">
           <section class="hero-row"><div><p class="eyebrow">MY WORKDAY</p><h1>Good morning,<br><em>${firstName}.</em></h1><p class="hero-copy">Lihat jadwal, absensi, dan tugas yang perlu Anda selesaikan hari ini.</p></div><button class="primary-button" data-open-attendance><i data-lucide="clock-3"></i> Buka absensi</button></section>
           <section class="employee-action-grid"><article class="employee-attendance-card metric-dark"><div><p class="eyebrow">ABSENSI HARI INI</p><h2 data-employee-attendance-status>Memuat status...</h2><p>Aktifkan GPS untuk melakukan check-in di lokasi bisnis.</p></div><button class="primary-button" data-open-attendance>Check-in sekarang <span>→</span></button></article><article class="panel employee-schedule-card"><div class="panel-heading"><div><h2>Jadwal hari ini</h2><p>Shift dan jam kerja Anda</p></div><i data-lucide="calendar-days"></i></div><div class="role-empty-state" data-employee-schedule><strong>Memuat jadwal...</strong><span>Jadwal akan muncul setelah Owner atau Admin menetapkan shift.</span></div></article></section>
+          <section class="employee-task-summary" data-employee-task-summary><button type="button" data-open-tasks><span class="eyebrow">TUGAS SAYA</span><strong data-employee-task-count>0 tugas aktif</strong><span>Lihat & kerjakan tugas Anda →</span></button></section>
           <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Riwayat absensi</h2><p>Aktivitas absensi terbaru Anda</p></div></div><div class="employee-attendance-history" data-employee-attendance-history><div class="role-empty-state"><strong>Memuat riwayat...</strong></div></div></article><aside class="quick-panel"><div class="quick-label">MY PROFILE</div><h2>${firstName}<br><em>at work.</em></h2><div class="employee-profile-summary"><strong>${profile?.displayName || "Employee"}</strong><span>${escapeHtml(profile?.email || "Email belum tersedia")}</span><span data-employee-business>Bisnis sedang dimuat...</span></div></aside></section>
         </main>
       </div>
@@ -298,12 +299,23 @@ function renderEmployeeDashboard(profile) {
   loadEmployeeDashboardData(profile);
 }
 
+async function loadEmployeeTaskSummary(uid, element) {
+  if (!element) return;
+  try {
+    const tasks = await listTasksForUser(uid);
+    const active = tasks.filter((task) => !["approved", "cancelled"].includes(task.status)).length;
+    element.textContent = active ? `${active} tugas aktif` : "Belum ada tugas aktif";
+  } catch (error) { element.textContent = "Tugas gagal dimuat"; }
+}
+
 async function loadEmployeeDashboardData(profile) {
   const scheduleElement = document.querySelector("[data-employee-schedule]");
   const statusElement = document.querySelector("[data-employee-attendance-status]");
   const historyElement = document.querySelector("[data-employee-attendance-history]");
   const businessElement = document.querySelector("[data-employee-business]");
+  const taskCountElement = document.querySelector("[data-employee-task-count]");
   const businessId = profile.businessIds?.[0];
+  loadEmployeeTaskSummary(profile.uid, taskCountElement);
   const today = getLocalDateKey();
   if (!businessId) {
     scheduleElement.innerHTML = "<strong>Belum ada bisnis.</strong><span>Hubungi Owner untuk mendapatkan penempatan bisnis.</span>";
