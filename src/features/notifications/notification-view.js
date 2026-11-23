@@ -3,6 +3,13 @@ import { formatInAppZone } from "../../lib/utils/time.js";
 
 let unsubscribe = null;
 
+export function stopNotificationBadges() {
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
+}
+
 export function initNotificationBadges(profile) {
   if (unsubscribe) unsubscribe();
   const buttons = document.querySelectorAll(".notification-button");

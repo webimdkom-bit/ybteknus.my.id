@@ -17,7 +17,7 @@ import { openRequestManager } from "./features/requests/request-view.js";
 import { openTaskManager } from "./features/tasks/task-view.js";
 import { openAuditViewer } from "./features/audit-trail/audit-view.js";
 import { openReportViewer } from "./features/reports/report-view.js";
-import { initNotificationBadges } from "./features/notifications/notification-view.js";
+import { initNotificationBadges, stopNotificationBadges } from "./features/notifications/notification-view.js";
 import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
@@ -486,6 +486,7 @@ function initials(name = "User") {
 
 subscribeToAuth(async (user) => {
   if (!user) {
+    stopNotificationBadges();
     renderAuthScreen(app);
     return;
   }

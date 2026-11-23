@@ -466,10 +466,14 @@ export async function listNotifications(userId, max = 50) {
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
-export function watchNotifications(userId, callback) {
+export function watchNotifications(userId, callback, onError) {
   return onSnapshot(
     query(collection(db, COLLECTIONS.NOTIFICATIONS), where("userId", "==", userId)),
     (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+    (error) => {
+      console.warn("[notifications] listener:", error?.code || error?.message || error);
+      onError?.(error);
+    },
   );
 }
 
