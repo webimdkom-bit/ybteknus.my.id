@@ -2,6 +2,7 @@ import { listBusinessesForOrganization, listEmployees, transferEmployee, updateB
 import { createOwnerBusiness } from "./business-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { escapeHtml } from "../../lib/utils/html.js";
+import { isAcceptingRegistrations, isBusinessActive } from "../../lib/utils/business.js";
 
 export async function openBusinessManager({ profile }) {
   const overlay = document.createElement("div");
@@ -115,7 +116,7 @@ export async function openBusinessManager({ profile }) {
 }
 
 function businessRow(business) {
-  const accepting = business.acceptingRegistrations !== false;
-  const active = business.status !== "inactive";
+  const accepting = isAcceptingRegistrations(business);
+  const active = isBusinessActive(business);
   return `<div class="managed-business-row ${active ? "" : "is-inactive"}"><div class="business-row-mark">${escapeHtml(business.name.slice(0, 1)).toUpperCase()}</div><div class="managed-business-info"><strong>${escapeHtml(business.name)}</strong><span>${escapeHtml(business.city || "Kota belum diatur")} · ${active ? "Aktif" : "Nonaktif"}</span></div><button class="business-edit-button" data-edit-business="${business.id}">Edit</button><button class="registration-toggle ${accepting ? "is-open" : ""}" data-toggle-registration="${business.id}" data-next-value="${!accepting}">${accepting ? "Registrasi terbuka" : "Registrasi ditutup"}</button><button class="business-status-button" data-toggle-status="${business.id}" data-next-status="${active ? "inactive" : "active"}">${active ? "Nonaktifkan" : "Aktifkan"}</button></div>`;
 }

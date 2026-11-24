@@ -1,11 +1,12 @@
 import { createBusiness, listBusinessesForOrganization } from "../../lib/firestore/repositories.js";
+import { normalizeBusinessStatus } from "../../lib/utils/business.js";
 
 export function getBusinessSummary(business) {
   return {
     id: business.id,
     name: business.name,
     city: business.city || "Lokasi belum diatur",
-    status: business.status || "active",
+    status: normalizeBusinessStatus(business.status),
   };
 }
 

@@ -17,6 +17,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebase/firebase.js";
+import { BUSINESS_STATUS, normalizeBusinessChanges, normalizeBusinessFields } from "../utils/business.js";
 
 const MAX_LIST = 200;
 
@@ -193,23 +194,21 @@ export async function createOrganization(organizationId, organization) {
 
 export async function createBusiness(business) {
   const reference = await addDoc(collection(db, COLLECTIONS.BUSINESSES), {
-    ...business,
-    status: business.status || "active",
-    acceptingRegistrations: business.acceptingRegistrations ?? true,
+    ...normalizeBusinessFields(business),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  return { id: reference.id, ...business };
+  return { id: reference.id, ...normalizeBusinessFields(business) };
 }
 
 export async function getBusiness(businessId) {
   const snapshot = await getDoc(doc(db, COLLECTIONS.BUSINESSES, businessId));
-  return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+  return snapshot.exists() ? { id: snapshot.id, ...normalizeBusinessFields(snapshot.data()) } : null;
 }
 
 export async function updateBusiness(businessId, changes) {
   await updateDoc(doc(db, COLLECTIONS.BUSINESSES, businessId), {
-    ...changes,
+    ...normalizeBusinessChanges(changes),
     updatedAt: serverTimestamp(),
   });
 }
@@ -219,17 +218,29 @@ export async function listBusinessesForOrganization(organizationId) {
     collection(db, COLLECTIONS.BUSINESSES),
     where("organizationId", "==", organizationId),
   ));
-  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+  return result.docs.map((item) => ({ id: item.id, ...normalizeBusinessFields(item.data()) }));
+}
+
+function openBusinessesQuery() {
+  return query(
+    collection(db, COLLECTIONS.BUSINESSES),
+    where("status", "==", BUSINESS_STATUS.ACTIVE),
+    where("acceptingRegistrations", "==", true),
+    limit(50),
+  );
 }
 
 export async function listOpenBusinesses() {
-  const result = await getDocs(query(
-    collection(db, COLLECTIONS.BUSINESSES),
-    where("status", "==", "active"),
-    where("acceptingRegistrations", "==", true),
-    limit(50),
-  ));
-  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+  const result = await getDocs(openBusinessesQuery());
+  return result.docs.map((item) => ({ id: item.id, ...normalizeBusinessFields(item.data()) }));
+}
+
+export function watchOpenBusinesses(onNext, onError) {
+  return onSnapshot(
+    openBusinessesQuery(),
+    (snapshot) => onNext(snapshot.docs.map((item) => ({ id: item.id, ...normalizeBusinessFields(item.data()) }))),
+    (error) => onError?.(error),
+  );
 }
 
 export async function createRegistration(registration) {

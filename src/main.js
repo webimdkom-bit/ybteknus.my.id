@@ -5,7 +5,7 @@ import "@fontsource/bebas-neue/400.css";
 import "./styles/main.css";
 import "./lib/firebase/firebase.js";
 import { subscribeToAuth, signOutUser } from "./features/auth/auth-service.js";
-import { renderAuthScreen } from "./features/auth/auth-view.js";
+import { renderAuthScreen, stopBusinessWatcher } from "./features/auth/auth-view.js";
 import { openScheduleManager } from "./features/schedules/schedule-view.js";
 import { openAttendancePanel, openLocationSettings } from "./features/attendance/attendance-view.js";
 import { openBusinessManager } from "./features/businesses/business-view.js";
@@ -608,6 +608,7 @@ subscribeToAuth(async (user) => {
     renderAuthScreen(app);
     return;
   }
+  stopBusinessWatcher();
   try {
     const profile = await getUserProfile(user.uid);
     if (!profile) {

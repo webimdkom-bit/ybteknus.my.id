@@ -1,7 +1,15 @@
-import { listOpenBusinesses } from "../../lib/firestore/repositories.js";
+import { watchOpenBusinesses } from "../../lib/firestore/repositories.js";
 import { registerEmployee, resetPassword, signIn } from "./auth-service.js";
 
+let unsubscribeBusinesses = null;
+
+export function stopBusinessWatcher() {
+  unsubscribeBusinesses?.();
+  unsubscribeBusinesses = null;
+}
+
 export function renderAuthScreen(app) {
+  stopBusinessWatcher();
   app.innerHTML = `
     <main class="auth-shell">
       <section class="auth-intro">
@@ -84,12 +92,12 @@ export function renderAuthScreen(app) {
     }
   });
 
-  listOpenBusinesses().then((businesses) => {
+  unsubscribeBusinesses = watchOpenBusinesses((businesses) => {
     businessSelect.innerHTML = businesses.length
       ? `<option value="">Pilih bisnis tujuan</option>${businesses.map((business) => `<option value="${business.id}">${business.name}${business.city ? ` · ${business.city}` : ""}</option>`).join("")}`
       : `<option value="">Belum ada bisnis yang menerima pendaftaran</option>`;
     businessSelect.dataset.businesses = JSON.stringify(businesses);
-  }).catch((loadError) => {
+  }, (loadError) => {
     console.error("Failed to load open businesses", loadError);
     businessSelect.innerHTML = `<option value="">Gagal memuat bisnis</option>`;
     error.textContent = humanizeFirestoreError(loadError);

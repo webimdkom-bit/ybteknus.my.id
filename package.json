@@ -11,7 +11,8 @@
     "build": "npx vite build",
     "preview": "npx vite preview",
     "test": "vitest",
-    "test:security": "vitest run tests/security"
+    "test:security": "vitest run tests/security",
+    "normalize:businesses": "node scripts/normalize-business-fields.mjs"
   },
   "dependencies": {
     "@fontsource/bebas-neue": "^5.3.0",
