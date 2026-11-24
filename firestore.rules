@@ -176,14 +176,7 @@ service cloud.firestore {
         && (ownUser(resource.data.userId)
           || canManageBusiness(resource.data.organizationId, resource.data.businessId)
           || adminHasPermission(resource.data.businessId, 'viewAttendance'));
-      allow create: if activeUser()
-        && ownUser(request.resource.data.userId)
-        && sameOrganization(request.resource.data.organizationId)
-        && currentUser().businessIds.hasAny([request.resource.data.businessId]);
-      allow update: if (isOwner() || adminHasPermission(resource.data.businessId, 'approveCorrections'))
-        && sameOrganization(resource.data.organizationId)
-        && sameOrganization(request.resource.data.organizationId);
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /attendanceCorrections/{correctionId} {
@@ -191,9 +184,7 @@ service cloud.firestore {
         && (ownUser(resource.data.userId)
           || (isOwner() && resource.data.organizationId == currentUser().organizationId)
           || adminHasPermission(resource.data.businessId, 'approveCorrections'));
-      allow create: if (isOwner() || adminHasPermission(request.resource.data.businessId, 'approveCorrections'))
-        && sameOrganization(request.resource.data.organizationId);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /overtime/{overtimeId} {

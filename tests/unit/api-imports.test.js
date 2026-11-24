@@ -6,8 +6,10 @@ const apiDir = fileURLToPath(new URL("../../api/", import.meta.url));
 const handlers = readdirSync(apiDir).filter((name) => name.endsWith(".js"));
 
 describe("Vercel API handlers", () => {
-  it("has all 10 endpoints", () => {
+  it("has all 12 endpoints", () => {
     expect(handlers.sort()).toEqual([
+      "attendance-correction.js",
+      "attendance.js",
       "audit-log.js",
       "file-access.js",
       "file-delete.js",

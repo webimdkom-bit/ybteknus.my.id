@@ -19,7 +19,7 @@ const ALLOWED_ACTIONS = new Set([
   "employee_transferred",
   "shift_created", "schedule_assigned",
   "request_submitted", "request_approved", "request_rejected",
-  "attendance_corrected", "overtime_reviewed",
+  "attendance_corrected", "attendance_recorded", "overtime_reviewed",
 ]);
 const EMPLOYEE_ACTIONS = new Set(["login", "logout", "request_submitted", "report_submitted", "file_uploaded"]);
 
