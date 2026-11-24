@@ -30,6 +30,15 @@ import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Us
 
 const app = document.querySelector("#app");
 const auditedLogins = new Set();
+const activityFilters = [
+  { value: "all", label: "Semua aktivitas" },
+  { value: "done", label: "Selesai" },
+  { value: "review", label: "Perlu review" },
+  { value: "assigned", label: "Ditugaskan" },
+];
+let selectedDateKey = getLocalDateKey();
+let dashboardViewModel = null;
+let activityFilter = "all";
 
 function renderDashboard(profile) {
   if (profile?.role === "employee") {
@@ -116,7 +125,7 @@ function renderOwnerDashboard(profile) {
             <h1>Good morning,<br><em>${firstName}.</em></h1>
             <p class="hero-copy" data-dashboard-scope>${roleView.subtitle}</p>
           </div>
-          <button class="primary-button"><i data-lucide="plus"></i> Buat tugas baru</button>
+          <button class="primary-button" data-open-tasks><i data-lucide="plus"></i> Buat tugas baru</button>
         </section>
 
         <section class="metric-grid" aria-label="Ringkasan metrik">
@@ -144,7 +153,7 @@ function renderOwnerDashboard(profile) {
 
         <section class="content-grid">
           <article class="panel attendance-panel">
-            <div class="panel-heading"><div><h2>Attendance pulse</h2><p>Performa kehadiran lintas bisnis</p></div><button class="text-button">Lihat laporan <i data-lucide="arrow-up-right"></i></button></div>
+            <div class="panel-heading"><div><h2>Attendance pulse</h2><p>Performa kehadiran lintas bisnis</p></div><button class="text-button" data-open-reports><span>Lihat laporan</span><i data-lucide="arrow-up-right"></i></button></div>
             <div class="chart-wrap">
               <div class="chart-y"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0</span></div>
               <div class="chart-area"><div class="chart-grid-lines"><i></i><i></i><i></i><i></i><i></i></div><svg class="attendance-chart" viewBox="0 0 640 210" preserveAspectRatio="none" aria-label="Grafik kehadiran mingguan"><path class="chart-fill" data-chart-fill d="M0 210 L640 210 L0 210Z"></path><path class="chart-line" data-chart-line d="M0 210 L640 210"></path><circle cx="578" cy="31" r="5"></circle></svg><div class="chart-x"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span></div></div>
@@ -153,14 +162,14 @@ function renderOwnerDashboard(profile) {
           </article>
 
           <article class="panel business-panel">
-            <div class="panel-heading"><div><h2>Business health</h2><p>Ringkasan hari ini</p></div><button class="icon-button"><i data-lucide="more-horizontal"></i></button></div>
+            <div class="panel-heading"><div><h2>Business health</h2><p>Ringkasan hari ini</p></div><button class="icon-button" data-open-businesses aria-label="Kelola bisnis"><i data-lucide="more-horizontal"></i></button></div>
             <div class="business-list" data-business-list><div class="role-empty-state"><strong>Memuat bisnis...</strong><span>Ringkasan performa akan muncul di sini.</span></div></div>
           </article>
         </section>
 
         <section class="bottom-grid">
           <article class="panel activity-panel">
-            <div class="panel-heading"><div><h2>Recent activity</h2><p>Aktivitas terbaru dari semua bisnis</p></div><button class="filter-button">Semua aktivitas <i data-lucide="chevron-down"></i></button></div>
+            <div class="panel-heading"><div><h2>Recent activity</h2><p>Aktivitas terbaru dari semua bisnis</p></div><button class="filter-button" data-activity-filter aria-label="Filter aktivitas"><span data-activity-filter-label>Semua aktivitas</span><i data-lucide="chevron-down"></i></button></div>
             <div class="activity-table" data-activity-list><div class="role-empty-state"><strong>Memuat aktivitas...</strong><span>Aktivitas terbaru akan muncul di sini.</span></div></div>
           </article>
           <aside class="quick-panel"><div class="quick-label">QUICK ACTIONS</div><h2>Keep the<br><em>momentum.</em></h2><p>Beberapa hal yang bisa Anda selesaikan sekarang.</p><button class="quick-action" data-open-registrations><span class="quick-action-icon"><i data-lucide="users"></i></span><span><strong>Review registrations</strong><small data-quick-registrations>0 karyawan menunggu</small></span><i data-lucide="arrow-up-right"></i></button><button class="quick-action" data-open-tasks><span class="quick-action-icon"><i data-lucide="file-bar-chart-2"></i></span><span><strong>Check pending reports</strong><small data-quick-reports>0 laporan perlu review</small></span><i data-lucide="arrow-up-right"></i></button></aside>
@@ -182,10 +191,10 @@ function renderOwnerDashboard(profile) {
     event.preventDefault();
     openScheduleManager({ profile });
   });
-  document.querySelector("[data-open-businesses]").addEventListener("click", (event) => {
+  document.querySelectorAll("[data-open-businesses]").forEach((button) => button.addEventListener("click", (event) => {
     event.preventDefault();
     if (profile.role === "owner") openBusinessManager({ profile });
-  });
+  }));
   document.querySelectorAll("[data-open-registrations]").forEach((button) => button.addEventListener("click", (event) => {
     event.preventDefault();
     if (profile.role === "owner") openRegistrationManager({ profile });
@@ -210,9 +219,11 @@ function renderOwnerDashboard(profile) {
     if (profile.role === "owner") openLocationSettings({ profile });
   });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
-  document.querySelector("[data-open-reports]")?.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); });
+  document.querySelectorAll("[data-open-reports]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); }));
   document.querySelector("[data-open-files]")?.addEventListener("click", (event) => { event.preventDefault(); openFileManager({ profile }); });
   wireOrganizationSwitcher(profile);
+  wireDateFilters(profile, () => refreshDashboard(profile));
+  wireActivityFilter();
   document.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
 }
 
@@ -290,6 +301,7 @@ function renderAdminDashboard(profile) {
   wireBusinessSwitcher(profile, () => refreshDashboard(profile));
   initNotificationBadges(profile);
   refreshDashboard(profile);
+  wireDateFilters(profile, () => refreshDashboard(profile));
   document.querySelectorAll("[data-open-schedules]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openScheduleManager({ profile }); }));
   document.querySelector("[data-open-employees]")?.addEventListener("click", (event) => {
     event.preventDefault();
@@ -298,7 +310,7 @@ function renderAdminDashboard(profile) {
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
-  document.querySelector("[data-open-reports]")?.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); });
+  document.querySelectorAll("[data-open-reports]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); }));
   document.querySelector("[data-open-files]")?.addEventListener("click", (event) => { event.preventDefault(); openFileManager({ profile }); });
 }
 
@@ -312,16 +324,16 @@ function renderEmployeeDashboard(profile) {
         <nav class="main-nav" aria-label="Navigasi employee">
           <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
           <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi</span><b>02</b></a>
-          <a class="nav-item" href="#schedule"><i data-lucide="calendar-days"></i><span>Jadwal</span><b>03</b></a>
+          <a class="nav-item" href="#employee-schedule"><i data-lucide="calendar-days"></i><span>Jadwal</span><b>03</b></a>
           <a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>04</b></a>
           <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas saya</span><b>05</b></a>
         </nav>
         <div class="sidebar-bottom"><div class="profile-mini"><div class="avatar">${initials(profile?.displayName)}</div><div><strong>${profile?.displayName || "User"}</strong><span>Employee · YB Tech</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
       </aside>
-      <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>My overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span>21 Nov 2026</span></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button><div class="avatar avatar-top">${initials(profile?.displayName)}</div></div></header>
+      <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>My overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>${formatDateLabel(selectedDateKey)}</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button><div class="avatar avatar-top">${initials(profile?.displayName)}</div></div></header>
         <main class="dashboard role-dashboard employee-dashboard" id="overview">
           <section class="hero-row"><div><p class="eyebrow">MY WORKDAY</p><h1>Good morning,<br><em>${firstName}.</em></h1><p class="hero-copy">Lihat jadwal, absensi, dan tugas yang perlu Anda selesaikan hari ini.</p></div><button class="primary-button" data-open-attendance><i data-lucide="clock-3"></i> Buka absensi</button></section>
-          <section class="employee-action-grid"><article class="employee-attendance-card metric-dark"><div><p class="eyebrow">ABSENSI HARI INI</p><h2 data-employee-attendance-status>Memuat status...</h2><p>Aktifkan GPS untuk melakukan check-in di lokasi bisnis.</p></div><button class="primary-button" data-open-attendance>Check-in sekarang <span>→</span></button></article><article class="panel employee-schedule-card"><div class="panel-heading"><div><h2>Jadwal hari ini</h2><p>Shift dan jam kerja Anda</p></div><i data-lucide="calendar-days"></i></div><div class="role-empty-state" data-employee-schedule><strong>Memuat jadwal...</strong><span>Jadwal akan muncul setelah Owner atau Admin menetapkan shift.</span></div></article></section>
+          <section class="employee-action-grid"><article class="employee-attendance-card metric-dark"><div><p class="eyebrow">ABSENSI HARI INI</p><h2 data-employee-attendance-status>Memuat status...</h2><p>Aktifkan GPS untuk melakukan check-in di lokasi bisnis.</p></div><button class="primary-button" data-open-attendance>Check-in sekarang <span>→</span></button></article><article class="panel employee-schedule-card" id="employee-schedule"><div class="panel-heading"><div><h2>Jadwal hari ini</h2><p>Shift dan jam kerja Anda</p></div><i data-lucide="calendar-days"></i></div><div class="role-empty-state" data-employee-schedule><strong>Memuat jadwal...</strong><span>Jadwal akan muncul setelah Owner atau Admin menetapkan shift.</span></div></article></section>
           <section class="employee-task-summary" data-employee-task-summary><button type="button" data-open-tasks><span class="eyebrow">TUGAS SAYA</span><strong data-employee-task-count>0 tugas aktif</strong><span>Lihat & kerjakan tugas Anda →</span></button></section>
           <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Riwayat absensi</h2><p>Aktivitas absensi terbaru Anda</p></div></div><div class="employee-attendance-history" data-employee-attendance-history><div class="role-empty-state"><strong>Memuat riwayat...</strong></div></div></article><aside class="quick-panel"><div class="quick-label">MY PROFILE</div><h2>${firstName}<br><em>at work.</em></h2><div class="employee-profile-summary"><strong>${profile?.displayName || "Employee"}</strong><span>${escapeHtml(profile?.email || "Email belum tersedia")}</span><span data-employee-business>Bisnis sedang dimuat...</span><button class="secondary-button" data-open-profile style="margin-top:10px">Edit profil</button></div></aside></section>
         </main>
@@ -331,6 +343,7 @@ function renderEmployeeDashboard(profile) {
   renderDashboardIcons();
   wireDashboardChrome();
   initNotificationBadges(profile);
+  wireDateFilters(profile, () => loadEmployeeDashboardData(profile, selectedDateKey));
   document.querySelectorAll("[data-open-attendance]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openAttendancePanel({ profile }); }));
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
@@ -347,7 +360,7 @@ async function loadEmployeeTaskSummary(uid, element) {
   } catch (error) { element.textContent = "Tugas gagal dimuat"; }
 }
 
-async function loadEmployeeDashboardData(profile) {
+async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
   const scheduleElement = document.querySelector("[data-employee-schedule]");
   const statusElement = document.querySelector("[data-employee-attendance-status]");
   const historyElement = document.querySelector("[data-employee-attendance-history]");
@@ -355,7 +368,7 @@ async function loadEmployeeDashboardData(profile) {
   const taskCountElement = document.querySelector("[data-employee-task-count]");
   const businessId = profile.businessIds?.[0];
   loadEmployeeTaskSummary(profile.uid, taskCountElement);
-  const today = getLocalDateKey();
+  const today = dateKey || getLocalDateKey();
   if (!businessId) {
     scheduleElement.innerHTML = "<strong>Belum ada bisnis.</strong><span>Hubungi Owner untuk mendapatkan penempatan bisnis.</span>";
     statusElement.textContent = "Belum terdaftar";
@@ -418,12 +431,13 @@ function buildChartPaths(series) {
 }
 
 function applyDashboardData(viewModel) {
+  dashboardViewModel = viewModel;
   const setText = (selector, value) => {
     const element = document.querySelector(selector);
     if (element) element.textContent = value;
   };
   const metrics = viewModel.metrics;
-  setText("[data-dashboard-date]", viewModel.generatedAt);
+  setText("[data-dashboard-date]", formatDateLabel(viewModel.dateKey || selectedDateKey));
   setText("[data-dashboard-eyebrow]", viewModel.generatedAt.toUpperCase());
   setText("[data-metric-attendance]", `${metrics.attendancePercent}%`);
   setText("[data-metric-attendance-foot]", `${metrics.attendanceHadir} orang hadir · ${metrics.late} terlambat · ${metrics.alpa} alpa`);
@@ -448,15 +462,18 @@ function applyDashboardData(viewModel) {
 
   const statusClass = (status) => (["approved", "done"].includes(status) ? "done" : ["review", "pending"].includes(status) ? "review" : "assigned");
   const businessColors = ["orange", "blue", "green", "purple"];
+  const activeFilter = activityFilters.find((item) => item.value === activityFilter) || activityFilters[0];
+  setText("[data-activity-filter-label]", activeFilter.label);
+  const visibleActivity = activityFilter === "all" ? viewModel.activity : viewModel.activity.filter((item) => statusClass(item.status) === activityFilter);
   const healthRows = viewModel.businessHealth.map((business, index) => `<div class="business-row"><div class="business-icon ${businessColors[index % businessColors.length]}">${escapeHtml(business.name.charAt(0))}</div><div class="business-info"><strong>${escapeHtml(business.name)}</strong><span><i data-lucide="map-pin"></i> ${escapeHtml(business.city)} · ${business.people} people</span></div><div class="health-score"><b>${business.score}%</b><span class="${business.score < 75 ? "health-alert" : ""}">${escapeHtml(business.label)}</span></div></div>`).join("");
-  const activityRows = viewModel.activity.map((item) => `<div class="activity-row"><div class="activity-event"><span class="event-icon ${statusClass(item.status)}"><i data-lucide="check"></i></span><div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></div></div><span class="person">Sistem</span><span class="time">${escapeHtml(item.time)}</span><span class="status-pill ${statusClass(item.status)}">${escapeHtml(item.status)}</span></div>`).join("");
+  const activityRows = visibleActivity.map((item) => `<div class="activity-row"><div class="activity-event"><span class="event-icon ${statusClass(item.status)}"><i data-lucide="check"></i></span><div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></div></div><span class="person">Sistem</span><span class="time">${escapeHtml(item.time)}</span><span class="status-pill ${statusClass(item.status)}">${escapeHtml(item.status)}</span></div>`).join("");
 
   const businessList = document.querySelector("[data-business-list]");
   if (businessList) businessList.innerHTML = healthRows || `<div class="role-empty-state"><strong>Belum ada bisnis aktif.</strong><span>Buat bisnis untuk melihat performa.</span></div>`;
   const activityList = document.querySelector("[data-activity-list]");
   if (activityList) activityList.innerHTML = activityRows
     ? `<div class="activity-header"><span>AKTIVITAS</span><span>OLEH</span><span>WAKTU</span><span>STATUS</span></div>${activityRows}`
-    : `<div class="role-empty-state"><strong>Belum ada aktivitas.</strong><span>Aktivitas akan muncul setelah ada transaksi.</span></div>`;
+    : `<div class="role-empty-state"><strong>Tidak ada aktivitas ${activeFilter.label.toLowerCase()}.</strong><span>Coba pilih filter aktivitas lain.</span></div>`;
   const adminDetail = document.querySelector("[data-admin-detail]");
   if (adminDetail) adminDetail.innerHTML = `<div class="role-empty-state"><strong>${metrics.businesses} bisnis terpantau.</strong><span>Hadir ${metrics.attendancePercent}%, ${metrics.runningTasks} tugas berjalan, ${metrics.pendingReviews} laporan perlu review.</span></div>${healthRows ? `<div class="business-list">${healthRows}</div>` : ""}`;
   renderDashboardIcons();
@@ -465,8 +482,8 @@ function applyDashboardData(viewModel) {
 async function refreshDashboard(profile) {
   try {
     const viewModel = profile.role === "admin"
-      ? await loadAdminDashboardData(profile)
-      : await loadOwnerDashboardData(profile);
+      ? await loadAdminDashboardData(profile, selectedDateKey)
+      : await loadOwnerDashboardData(profile, selectedDateKey);
     applyDashboardData(viewModel);
     syncDeadlineNotifications(profile);
   } catch (error) {
@@ -492,6 +509,56 @@ function wireDashboardChrome() {
 
 function renderDashboardIcons() {
   createIcons({ icons: { Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck, FolderOpen } });
+}
+
+function updateDashboardDateLabels(dateKey) {
+  document.querySelectorAll("[data-dashboard-date]").forEach((element) => {
+    element.textContent = formatDateLabel(dateKey);
+  });
+}
+
+function wireDateFilters(profile, onDateChange) {
+  document.querySelectorAll(".date-filter").forEach((button) => {
+    if (button.querySelector("[data-dashboard-date-input]")) return;
+    const input = document.createElement("input");
+    input.type = "date";
+    input.value = selectedDateKey || getLocalDateKey();
+    input.hidden = true;
+    input.dataset.dashboardDateInput = "true";
+    input.setAttribute("aria-label", "Pilih tanggal data dashboard");
+    input.style.position = "absolute";
+    input.style.width = "1px";
+    input.style.height = "1px";
+    input.style.opacity = "0";
+    input.style.pointerEvents = "none";
+    button.append(input);
+    button.addEventListener("click", (event) => {
+      if (event.target === input) return;
+      input.hidden = false;
+      try {
+        input.showPicker();
+      } catch {
+        input.click();
+      }
+    });
+    input.addEventListener("change", () => {
+      if (!input.value) return;
+      selectedDateKey = input.value;
+      input.hidden = true;
+      updateDashboardDateLabels(selectedDateKey);
+      onDateChange?.(selectedDateKey);
+    });
+  });
+}
+
+function wireActivityFilter() {
+  const button = document.querySelector("[data-activity-filter]");
+  if (!button) return;
+  button.addEventListener("click", () => {
+    const index = activityFilters.findIndex((item) => item.value === activityFilter);
+    activityFilter = activityFilters[(index + 1) % activityFilters.length].value;
+    if (dashboardViewModel) applyDashboardData(dashboardViewModel);
+  });
 }
 
 async function wireBusinessSwitcher(profile, onScopeChange) {

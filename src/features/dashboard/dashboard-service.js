@@ -25,6 +25,11 @@ export function toDateKey(date) {
   return getDateKey(date);
 }
 
+export function resolveDashboardDateKey(dateKey) {
+  const value = String(dateKey || "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : toDateKey(new Date());
+}
+
 function shiftDateKey(dateKey, days) {
   const [year, month, day] = String(dateKey).split("-").map(Number);
   return getDateKey(new Date(Date.UTC(year, month - 1, day + days)));
@@ -180,7 +185,8 @@ function buildViewModel({ businesses, employees, attendanceToday, attendanceWeek
   const pendingRegistrations = registrations.length;
 
   return {
-    generatedAt: formatInAppZone(new Date(), { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+    dateKey: today,
+    generatedAt: formatInAppZone(`${today}T12:00:00+07:00`, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
     metrics: {
       attendancePercent: attendance.percent,
       attendanceHadir: attendance.hadir,
@@ -201,9 +207,9 @@ function buildViewModel({ businesses, employees, attendanceToday, attendanceWeek
   };
 }
 
-export async function loadOwnerDashboardData(profile) {
+export async function loadOwnerDashboardData(profile, dateKey) {
   const organizationId = profile.organizationId;
-  const today = toDateKey(new Date());
+  const today = resolveDashboardDateKey(dateKey);
   const from = shiftDateKey(today, -6);
 
   const [businesses, employees, attendanceToday, attendanceWeek, schedulesToday, schedulesWeek, registrations, requests, tasks, reports] = await Promise.all([
@@ -242,9 +248,9 @@ export async function loadOwnerDashboardData(profile) {
   });
 }
 
-export async function loadAdminDashboardData(profile) {
+export async function loadAdminDashboardData(profile, dateKey) {
   const organizationId = profile.organizationId;
-  const today = toDateKey(new Date());
+  const today = resolveDashboardDateKey(dateKey);
   const from = shiftDateKey(today, -6);
   const businessIds = (profile.businessIds || []).filter((id) => !profile.selectedBusinessId || id === profile.selectedBusinessId);
 
