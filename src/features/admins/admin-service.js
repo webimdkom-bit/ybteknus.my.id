@@ -31,3 +31,7 @@ export function updateAdminAccess({ userId, organizationId, access }) {
 export function deactivateAdmin(userId) {
   return updateUserProfile(userId, { status: "inactive" });
 }
+
+export function activateAdmin(userId) {
+  return updateUserProfile(userId, { status: "active" });
+}

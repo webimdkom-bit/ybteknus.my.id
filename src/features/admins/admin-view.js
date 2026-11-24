@@ -1,5 +1,5 @@
 import { listBusinessesForOrganization, listMembershipsForUser } from "../../lib/firestore/repositories.js";
-import { ADMIN_PERMISSION_OPTIONS, createAdminAccount, deactivateAdmin, listAdmins, updateAdminAccess } from "./admin-service.js";
+import { activateAdmin, ADMIN_PERMISSION_OPTIONS, createAdminAccount, deactivateAdmin, listAdmins, updateAdminAccess } from "./admin-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { escapeHtml } from "../../lib/utils/html.js";
 
@@ -56,6 +56,15 @@ export async function openAdminManager({ profile }) {
            await loadAdmins();
          }
         catch (error) { overlay.querySelector(".owner-error").textContent = error.message; button.disabled = false; }
+      }));
+      adminList.querySelectorAll("[data-activate-admin]").forEach((button) => button.addEventListener("click", async () => {
+        if (!window.confirm("Aktifkan kembali akses Admin ini?")) return;
+        button.disabled = true;
+        try {
+          await activateAdmin(button.dataset.activateAdmin);
+          logAuditSafe({ profile, action: "admin_activated", targetType: "user", targetId: button.dataset.activateAdmin });
+          await loadAdmins();
+        } catch (error) { overlay.querySelector(".owner-error").textContent = error.message; button.disabled = false; }
       }));
     } catch (error) { adminList.innerHTML = `<p class="owner-error">${error.message}</p>`; }
   };
@@ -130,7 +139,7 @@ function resetAdminForm(form, businessList, businesses, overlay) {
 
 function adminRow(admin, businesses) {
   const names = (admin.businessIds || []).map((id) => businesses.find((business) => business.id === id)?.name || "Bisnis").join(", ");
-  return `<article class="managed-owner-row ${admin.status === "active" ? "" : "is-inactive"}"><div class="owner-row-mark">${escapeHtml((admin.displayName || admin.email || "A").slice(0, 1)).toUpperCase()}</div><div class="managed-owner-info"><strong>${escapeHtml(admin.displayName || "Tanpa nama")}</strong><span>${escapeHtml(admin.email || "Email tidak tersedia")}</span><small>${escapeHtml(names || "Belum ada bisnis")}</small></div><div class="owner-status">${admin.status === "active" ? "Aktif" : "Nonaktif"}</div>${admin.status === "active" ? `<button class="remove-owner" data-edit-admin="${admin.id}">Atur akses</button><button class="remove-owner" data-deactivate-admin="${admin.id}">Nonaktifkan</button>` : ""}</article>`;
+  return `<article class="managed-owner-row ${admin.status === "active" ? "" : "is-inactive"}"><div class="owner-row-mark">${escapeHtml((admin.displayName || admin.email || "A").slice(0, 1)).toUpperCase()}</div><div class="managed-owner-info"><strong>${escapeHtml(admin.displayName || "Tanpa nama")}</strong><span>${escapeHtml(admin.email || "Email tidak tersedia")}</span><small>${escapeHtml(names || "Belum ada bisnis")}</small></div><div class="owner-status">${admin.status === "active" ? "Aktif" : "Nonaktif"}</div>${admin.status === "active" ? `<button class="remove-owner" data-edit-admin="${admin.id}">Atur akses</button><button class="remove-owner" data-deactivate-admin="${admin.id}">Nonaktifkan</button>` : `<button class="remove-owner" data-activate-admin="${admin.id}">Aktifkan</button>`}</article>`;
 }
 
 function humanizeAdminError(error) {
