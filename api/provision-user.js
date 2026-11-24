@@ -1,6 +1,7 @@
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "../server/shared/admin.js";
+import { assertActiveActor } from "../server/shared/actor.js";
 import { verifyFirebaseToken } from "../server/shared/auth.js";
 import { ADMIN_PERMISSIONS } from "../server/shared/permissions.js";
 import { jakartaNow } from "../server/shared/time.js";
@@ -22,8 +23,7 @@ export default async function handler(req, res) {
 
   const app = getAdminApp();
   const db = getFirestore(app);
-  const actorSnapshot = await db.collection("users").doc(uid).get();
-  const actor = actorSnapshot.exists ? actorSnapshot.data() : null;
+  const actor = await assertActiveActor(uid);
   if (!actor || actor.role !== "owner" || actor.organizationId !== organizationId) return sendJson(res, 403, { error: "Hanya Owner organization yang dapat membuat akun." });
 
   const rawAccess = Array.isArray(body.access) ? body.access : [];

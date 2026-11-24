@@ -1,5 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "../server/shared/admin.js";
+import { assertActiveActor } from "../server/shared/actor.js";
 import { verifyFirebaseToken } from "../server/shared/auth.js";
 import { jakartaNow } from "../server/shared/time.js";
 import { parseBody, requirePost, sendJson } from "../server/shared/http.js";
@@ -16,8 +17,7 @@ export default async function handler(req, res) {
   if (!organizationId) return sendJson(res, 400, { error: "organizationId wajib diisi." });
 
   const db = getFirestore(getAdminApp());
-  const actorSnapshot = await db.collection("users").doc(uid).get();
-  const actor = actorSnapshot.exists ? actorSnapshot.data() : null;
+  const actor = await assertActiveActor(uid);
   if (!actor || actor.status !== "active") return sendJson(res, 403, { error: "Akun tidak aktif." });
   if (actor.role !== "owner") return sendJson(res, 403, { error: "Hanya Owner yang dapat berpindah Organization." });
 

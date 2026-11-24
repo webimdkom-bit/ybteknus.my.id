@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { v2 as cloudinary } from "cloudinary";
 import { getAdminApp } from "../server/shared/admin.js";
+import { assertActiveActor } from "../server/shared/actor.js";
 import { canAccessFile } from "../server/shared/access.js";
 import { verifyFirebaseToken } from "../server/shared/auth.js";
 import { parseBody, requirePost, sendJson } from "../server/shared/http.js";
@@ -20,9 +21,8 @@ export default async function handler(req, res) {
   const snapshot = await db.collection("files").doc(fileId).get();
   if (!snapshot.exists) return sendJson(res, 404, { error: "File tidak ditemukan." });
   const file = snapshot.data();
-  const actorSnapshot = await db.collection("users").doc(uid).get();
-  const actor = actorSnapshot.exists ? actorSnapshot.data() : null;
-  if (!actor) return sendJson(res, 403, { error: "Profil pengguna tidak ditemukan." });
+  const actor = await assertActiveActor(uid);
+  if (!actor) return sendJson(res, 403, { error: "Akun tidak aktif." });
   if (!canAccessFile({ ...actor, uid }, file)) return sendJson(res, 403, { error: "Tidak memiliki izin mengakses file." });
 
   cloudinary.v2.config({

@@ -1,5 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "../server/shared/admin.js";
+import { assertActiveActor } from "../server/shared/actor.js";
 import { verifyFirebaseToken } from "../server/shared/auth.js";
 import { jakartaNow } from "../server/shared/time.js";
 import { parseBody, requirePost, sendJson } from "../server/shared/http.js";
@@ -18,9 +19,8 @@ export default async function handler(req, res) {
   if (!fileName || !publicId || !secureUrl) return sendJson(res, 400, { error: "fileName, publicId, dan secureUrl wajib diisi." });
 
   const db = getFirestore(getAdminApp());
-  const actorSnapshot = await db.collection("users").doc(uid).get();
-  const actor = actorSnapshot.exists ? actorSnapshot.data() : null;
-  if (!actor) return sendJson(res, 403, { error: "Profil pengguna tidak ditemukan." });
+  const actor = await assertActiveActor(uid);
+  if (!actor) return sendJson(res, 403, { error: "Akun tidak aktif." });
 
   const organizationId = String(body.organizationId || actor.organizationId || "").trim();
   const businessId = body.businessId ? String(body.businessId).trim() : null;

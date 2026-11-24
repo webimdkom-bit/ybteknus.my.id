@@ -44,10 +44,30 @@ describe("Firestore rules isolation clauses", () => {
   });
 
   it("request reviews require same organization", () => {
-    expect(rules).toContain("canReviewRequest(resource.data.businessId, resource.data.type)\n          && sameOrganization(resource.data.organizationId)");
+    expect(rules).toContain("canReviewRequest(resource.data.businessId, resource.data.type)");
+    expect(rules).toContain("&& sameOrganization(resource.data.organizationId)));");
   });
 
   it("unknown collections are denied by default", () => {
     expect(rules).toContain("match /{collection}/{documentId} {\n      allow read, create, update, delete: if false;");
+  });
+
+  it("enforces active account status", () => {
+    expect(rules).toContain("function activeUser() {\n      return signedIn() && currentUser().status == 'active';\n    }");
+    expect(rules).toMatch(/function isOwner\(\) \{\n      return activeUser\(\)/);
+    expect(rules).toMatch(/function isAdmin\(\) \{\n      return activeUser\(\)/);
+    expect(rules).toContain("function sameOrganization(organizationId) {\n      return activeUser()");
+  });
+
+  it("requires same organization on owner writes", () => {
+    const branches = ["allow create: if (isOwner() || adminHasPermission", "allow update: if (isOwner() || adminHasPermission", "allow delete: if (isOwner() || adminHasPermission"];
+    branches.forEach((needle) => expect(rules).toContain(needle));
+    expect(rules).toContain("allow delete: if isOwner()\n        && sameOrganization(resource.data.organizationId);");
+    expect(rules).toContain("request.resource.data.organizationId == resource.data.organizationId");
+  });
+
+  it("still allows pending self-registration and own profile reads", () => {
+    expect(rules).toContain("ownUser(userId)\n          && request.resource.data.role == 'employee'\n          && request.resource.data.status == 'pending'");
+    expect(rules).toContain("allow read: if ownUser(userId)");
   });
 });
