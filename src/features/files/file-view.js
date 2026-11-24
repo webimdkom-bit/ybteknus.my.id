@@ -1,4 +1,4 @@
-import { listFilesForBusiness, listFilesForUser } from "../../lib/firestore/repositories.js";
+import { listFilesForBusiness, listFilesForOrganization, listFilesForUser } from "../../lib/firestore/repositories.js";
 import { requestFileAccess, requestFileDeletion } from "../files/file-upload-service.js";
 import { escapeHtml } from "../../lib/utils/html.js";
 
@@ -16,7 +16,9 @@ export async function openFileManager({ profile }) {
     try {
       const files = profile.role === "employee"
         ? await listFilesForUser(profile.uid)
-        : (await Promise.all((profile.businessIds || []).map((id) => listFilesForBusiness(profile.organizationId, id)))).flat();
+        : profile.role === "owner"
+          ? await listFilesForOrganization(profile.organizationId)
+          : (await Promise.all((profile.businessIds || []).map((id) => listFilesForBusiness(profile.organizationId, id)))).flat();
       list.innerHTML = files.length
         ? files.map((file) => `<article class="file-row"><div class="file-icon">${file.resourceType === "image" ? "IMG" : "DOC"}</div><div class="file-copy"><strong>${escapeHtml(file.fileName)}</strong><span>${escapeHtml(file.category || "file")} · ${escapeHtml(file.access || "public")} · ${escapeHtml(String(file.createdAt?.toDate ? file.createdAt.toDate().toLocaleDateString("id-ID") : file.createdAt || "").slice(0, 10))}</span></div><div class="file-actions"><button class="secondary-button" data-file-open="${file.id}">Buka</button>${file.status !== "deleted" && (profile.role === "owner" || file.uploadedBy === profile.uid) ? `<button class="reject-registration" data-file-delete="${file.id}">Hapus</button>` : ""}</div></article>`).join("")
         : `<div class="role-empty-state"><strong>Belum ada file.</strong><span>Lampiran tugas dan dokumen akan tampil di sini.</span></div>`;

@@ -14,6 +14,8 @@ import {
   listTaskCategories,
   createTaskCategory,
   watchTasksForUser,
+  watchTasksForOrganization,
+  watchTasksForBusiness,
   updateTask,
   reviewTaskReport,
 } from "../../lib/firestore/repositories.js";
@@ -55,6 +57,12 @@ export async function openTaskManager({ profile }) {
     stopTaskWatch = watchTasksForUser(profile.uid, (tasks) => renderTaskList(overlay, profile, tasks, [], canManage));
   }
   await loadTaskList(overlay, profile, canManage, taskLimit);
+  if (profile.role === "owner") {
+    stopTaskWatch = watchTasksForOrganization(profile.organizationId, (tasks) => renderTaskList(overlay, profile, tasks, [], canManage));
+  } else if (profile.role === "admin") {
+    const stops = (profile.businessIds || []).map((businessId) => watchTasksForBusiness(profile.organizationId, businessId, (tasks) => renderTaskList(overlay, profile, tasks, [], canManage)));
+    stopTaskWatch = () => stops.forEach((stop) => stop());
+  }
 }
 
 function taskFormMarkup() {

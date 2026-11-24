@@ -12,7 +12,9 @@ export async function openAuditViewer({ profile }) {
 
   const list = overlay.querySelector(".audit-list");
   try {
-    const logs = await listAuditLogs(profile.organizationId, profile.role === "admin" ? { businessId: profile.businessIds?.[0] } : {});
+    const logs = profile.role === "admin"
+      ? (await Promise.all((profile.businessIds || []).map((id) => listAuditLogs(profile.organizationId, { businessId: id })))).flat()
+      : await listAuditLogs(profile.organizationId);
     list.innerHTML = logs.length
       ? `<div class="audit-table"><div class="audit-header"><span>AKSI</span><span>AKTOR</span><span>TARGET</span><span>WAKTU</span></div>${logs.map((log) => `<div class="audit-row"><div class="audit-action"><strong>${escapeHtml(log.action)}</strong><span>${escapeHtml(log.targetType)}${log.targetId ? ` · ${escapeHtml(log.targetId)}` : ""}</span></div><span class="audit-actor">${escapeHtml(log.actorName || log.actorId || "-")}<small>${escapeHtml(log.actorRole || "")}</small></span><span class="audit-target">${escapeHtml(log.businessId || log.organizationId || "-")}<small>${escapeHtml(Object.entries(log.metadata || {}).map(([key, value]) => `${key}: ${value}`).join(", "))}</small></span><span class="audit-time">${formatAuditTime(log.timestamp)}</span></div>`).join("")}</div>`
       : `<div class="role-empty-state"><strong>Belum ada aktivitas tercatat.</strong><span>Perubahan penting akan muncul di sini.</span></div>`;

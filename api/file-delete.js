@@ -36,6 +36,19 @@ export default async function handler(req, res) {
 
   configureCloudinary();
   const result = await cloudinary.v2.uploader.destroy(file.cloudinaryPublicId);
-  await db.collection("files").doc(fileId).update({ status: "deleted", deletedBy: uid, deletedAt: jakartaNow() });
+  const nowIso = jakartaNow();
+  await db.collection("files").doc(fileId).update({ status: "deleted", deletedBy: uid, deletedAt: nowIso });
+  await db.collection("auditLogs").add({
+    actorId: uid,
+    actorName: actor.displayName || actor.email || "",
+    actorRole: actor.role,
+    organizationId: actor.organizationId,
+    businessId: file.businessId || null,
+    action: "file_deleted",
+    targetType: "file",
+    targetId: fileId,
+    metadata: { fileName: file.fileName, publicId: file.cloudinaryPublicId },
+    timestamp: nowIso,
+  });
   return sendJson(res, 200, { result: result.result, fileId });
 }

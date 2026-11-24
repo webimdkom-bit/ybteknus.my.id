@@ -446,6 +446,15 @@ export async function createFileMetadata(record) {
   return { id: reference.id, ...record };
 }
 
+export async function listFilesForOrganization(organizationId, max = 200) {
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.FILES),
+    where("organizationId", "==", organizationId),
+    limit(max),
+  ));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
 export async function listFilesForBusiness(organizationId, businessId, max = 100) {
   const constraints = [where("organizationId", "==", organizationId)];
   if (businessId) constraints.push(where("businessId", "==", businessId));
@@ -573,6 +582,33 @@ export async function listTasksForUser(userId, max = MAX_LIST) {
     limit(max),
   ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export function watchTasksForOrganization(organizationId, callback, onError) {
+  return onSnapshot(
+    query(collection(db, COLLECTIONS.TASKS), where("organizationId", "==", organizationId), limit(MAX_LIST)),
+    (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+    (error) => {
+      console.warn("[tasks] listener:", error?.code || error?.message || error);
+      onError?.(error);
+    },
+  );
+}
+
+export function watchTasksForBusiness(organizationId, businessId, callback, onError) {
+  return onSnapshot(
+    query(
+      collection(db, COLLECTIONS.TASKS),
+      where("organizationId", "==", organizationId),
+      where("businessId", "==", businessId),
+      limit(MAX_LIST),
+    ),
+    (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+    (error) => {
+      console.warn("[tasks] listener:", error?.code || error?.message || error);
+      onError?.(error);
+    },
+  );
 }
 
 export function watchTasksForUser(userId, callback, onError) {

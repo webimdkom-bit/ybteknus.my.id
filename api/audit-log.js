@@ -12,7 +12,7 @@ const ALLOWED_ACTIONS = new Set([
   "task_created", "task_progress_updated", "task_cancelled", "subtask_created",
   "report_submitted", "report_approved", "report_revision_requested",
   "final_report_submitted", "final_report_resubmitted", "final_report_approved", "final_report_revision_requested",
-  "file_uploaded",
+  "file_uploaded", "file_deleted",
   "account_status_changed", "account_deactivated", "owner_created",
   "admin_created", "admin_access_changed", "admin_deactivated",
   "business_created", "business_updated", "business_registration_toggled", "business_location_changed",
