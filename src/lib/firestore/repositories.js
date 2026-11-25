@@ -48,7 +48,7 @@ export const COLLECTIONS = Object.freeze({
 
 export async function getUserProfile(uid) {
   const snapshot = await getDoc(doc(db, COLLECTIONS.USERS, uid));
-  return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+  return snapshot.exists() ? { id: snapshot.id, uid: snapshot.id, ...snapshot.data() } : null;
 }
 
 export async function listOwners(organizationId) {
