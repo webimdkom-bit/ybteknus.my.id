@@ -2,7 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "../server/shared/admin.js";
 import { assertActiveActor } from "../server/shared/actor.js";
 import { verifyFirebaseToken } from "../server/shared/auth.js";
-import { generateUploadSignature } from "../server/shared/cloudinary.js";
+import { generateUploadSignature, isCloudinaryConfigured } from "../server/shared/cloudinary.js";
 import { parseBody, requirePost, sendJson } from "../server/shared/http.js";
 
 export default async function handler(req, res) {
@@ -21,6 +21,7 @@ export default async function handler(req, res) {
     return sendJson(res, 400, { error: "taskId atau reportId, fileName, dan resourceType wajib diisi." });
   }
 
+  if (!isCloudinaryConfigured()) return sendJson(res, 503, { error: "Cloudinary belum dikonfigurasi." });
   const db = getFirestore(getAdminApp());
   const actor = await assertActiveActor(uid);
   if (!actor) return sendJson(res, 403, { error: "Akun tidak aktif." });

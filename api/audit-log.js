@@ -22,7 +22,12 @@ const ALLOWED_ACTIONS = new Set([
   "request_submitted", "request_approved", "request_rejected",
   "attendance_corrected", "attendance_recorded", "overtime_reviewed",
 ]);
-const EMPLOYEE_ACTIONS = new Set(["login", "logout", "request_submitted", "report_submitted", "file_uploaded"]);
+const EMPLOYEE_ACTIONS = new Set([
+  "login", "logout",
+  "request_submitted", "task_completed", "task_progress_updated",
+  "report_submitted", "file_uploaded",
+  "daily_report_submitted",
+]);
 
 export default async function handler(req, res) {
   if (!requirePost(req, res)) return;
@@ -50,10 +55,16 @@ export default async function handler(req, res) {
   if (role === "employee") {
     if (!EMPLOYEE_ACTIONS.has(action)) return sendJson(res, 403, { error: "Aksi tidak diizinkan untuk employee." });
     if (targetId && targetId !== uid) {
-      const collection = targetType === "request" ? "requests" : targetType === "taskReport" ? "taskReports" : null;
+      const collections = { request: "requests", taskReport: "taskReports", task: "tasks", dailyReport: "dailyReports", file: "files" };
+      const collection = collections[targetType];
       if (!collection) return sendJson(res, 403, { error: "Target audit tidak valid." });
       const target = await db.collection(collection).doc(targetId).get();
-      if (!target.exists || target.data().userId !== uid) return sendJson(res, 403, { error: "Target audit bukan milik Anda." });
+      if (!target.exists) return sendJson(res, 403, { error: "Target audit bukan milik Anda." });
+      const data = target.data();
+      const owned = data.userId === uid
+        || data.uploadedBy === uid
+        || (data.assignedTo || []).includes(uid);
+      if (!owned) return sendJson(res, 403, { error: "Target audit bukan milik Anda." });
     }
   }
 

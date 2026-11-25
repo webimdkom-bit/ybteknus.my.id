@@ -1,19 +1,12 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { v2 as cloudinary } from "cloudinary";
 import { getAdminApp } from "../server/shared/admin.js";
+import { configureCloudinary, isCloudinaryConfigured } from "../server/shared/cloudinary.js";
 import { assertActiveActor } from "../server/shared/actor.js";
 import { canAccessFile } from "../server/shared/access.js";
 import { verifyFirebaseToken } from "../server/shared/auth.js";
 import { jakartaNow } from "../server/shared/time.js";
 import { parseBody, requirePost, sendJson } from "../server/shared/http.js";
-
-function configureCloudinary() {
-  cloudinary.v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-}
 
 export default async function handler(req, res) {
   if (!requirePost(req, res)) return;
@@ -34,8 +27,9 @@ export default async function handler(req, res) {
   if (!actor) return sendJson(res, 403, { error: "Akun tidak aktif." });
   if (!canAccessFile({ ...actor, uid }, file)) return sendJson(res, 403, { error: "Tidak memiliki izin menghapus file." });
 
+  if (!isCloudinaryConfigured()) return sendJson(res, 503, { error: "Cloudinary belum dikonfigurasi." });
   configureCloudinary();
-  const result = await cloudinary.v2.uploader.destroy(file.cloudinaryPublicId);
+  const result = await cloudinary.uploader.destroy(file.cloudinaryPublicId);
   const nowIso = jakartaNow();
   await db.collection("files").doc(fileId).update({ status: "deleted", deletedBy: uid, deletedAt: nowIso });
   await db.collection("auditLogs").add({

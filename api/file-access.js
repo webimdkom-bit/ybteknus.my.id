@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { v2 as cloudinary } from "cloudinary";
 import { getAdminApp } from "../server/shared/admin.js";
+import { configureCloudinary, isCloudinaryConfigured } from "../server/shared/cloudinary.js";
 import { assertActiveActor } from "../server/shared/actor.js";
 import { canAccessFile } from "../server/shared/access.js";
 import { verifyFirebaseToken } from "../server/shared/auth.js";
@@ -25,14 +26,10 @@ export default async function handler(req, res) {
   if (!actor) return sendJson(res, 403, { error: "Akun tidak aktif." });
   if (!canAccessFile({ ...actor, uid }, file)) return sendJson(res, 403, { error: "Tidak memiliki izin mengakses file." });
 
-  cloudinary.v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-
   if (file.access !== "private") return sendJson(res, 200, { url: file.secureUrl, access: "public" });
+  if (!isCloudinaryConfigured()) return sendJson(res, 503, { error: "Cloudinary belum dikonfigurasi." });
+  configureCloudinary();
   const expiresAt = Math.floor(Date.now() / 1000) + 600;
-  const url = await cloudinary.v2.utils.private_download_url(file.cloudinaryPublicId, file.format || "", { expires_at: expiresAt });
+  const url = cloudinary.utils.private_download_url(file.cloudinaryPublicId, file.format || "", { expires_at: expiresAt });
   return sendJson(res, 200, { url, access: "private", expiresAt });
 }
