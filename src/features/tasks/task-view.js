@@ -16,10 +16,11 @@ import {
   watchTasksForUser,
   watchTasksForOrganization,
   watchTasksForBusiness,
-  updateTask,
+  updateTaskAndDailyReports,
   reviewTaskReport,
   archiveTask,
   restoreTask,
+  syncDailyReportTask,
 } from "../../lib/firestore/repositories.js";
 import { DEFAULT_TASK_CATEGORIES } from "../../config/constants.js";
 import { formatTaskDeadline, getDeadlineMillis, getTimeStatus, isTaskOverdue, normalizeDeadline, toDateTimeLocalValue } from "./task-status.js";
@@ -306,7 +307,7 @@ async function loadTaskList(overlay, profile, canManage, max = 200, context = nu
 async function syncTimeStatus(taskId, tasks, status) {
   const task = tasks.find((item) => item.id === taskId);
   if (!task) return;
-  await updateTask(taskId, {
+  await updateTaskAndDailyReports(taskId, {
     timeStatus: getTimeStatus({ deadline: normalizeDeadline(task.deadline), submittedAt: getJakartaISO(), status }),
   });
 }
@@ -353,13 +354,13 @@ async function syncParentProgress(parentId, tasks, profile) {
   const parent = tasks.find((task) => task.id === parentId);
   if (!parent) return;
   const progress = parentProgress(parentId, tasks);
-  await updateTask(parentId, { progress });
+  await updateTaskAndDailyReports(parentId, { progress });
   logAuditSafe({ profile, action: "task_progress_updated", targetType: "task", targetId: parentId, businessId: parent.businessId, metadata: { progress } });
 }
 
 function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
   overlay.querySelectorAll("[data-task-action=\"start\"]").forEach((button) => button.addEventListener("click", async () => {
-    await updateTask(button.dataset.taskId, { status: "in-progress" });
+    await updateTaskAndDailyReports(button.dataset.taskId, { status: "in-progress" });
     await reload();
   }));
   overlay.querySelectorAll("[data-task-check]").forEach((checkbox) => checkbox.addEventListener("change", async () => {
@@ -376,7 +377,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
         status,
       }
       : { checklist, progress: checklist.length ? Math.round(completed / checklist.length * 100) : 0, status };
-    await updateTask(task.id, changes);
+    await updateTaskAndDailyReports(task.id, changes);
     if (task.parentTaskId) await syncParentProgress(task.parentTaskId, tasks, profile);
     await reload();
   }));
@@ -414,6 +415,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
       const description = window.prompt("Tulis laporan pekerjaan:", task.description || "");
       if (!description) return;
       const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: uploaded.secure_url, fileMetadataId, checklist: task.checklist || [] });
+      await syncDailyReportTask({ taskId: task.id, userId: profile.uid, reportId: report.id, reportStatus: "submitted" });
       logAuditSafe({ profile, action: "report_submitted", targetType: "taskReport", targetId: report?.id || null, businessId: task.businessId, metadata: { taskId: task.id, fileName: file.name } });
       logAuditSafe({ profile, action: "file_uploaded", targetType: "file", targetId: uploaded.public_id || null, businessId: task.businessId, metadata: { fileName: file.name, taskId: task.id } });
       const notification = { type: NOTIFICATION_TYPES.reportSubmitted, title: "Laporan tugas dikirim", body: description, organizationId: task.organizationId, businessId: task.businessId, targetType: "taskReport", targetId: report?.id || null };
@@ -421,7 +423,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
       notifySafe({ ...notification, audience: "admins", permission: "reviewSubmissions" });
       const parent = tasks.find((item) => item.id === task.parentTaskId);
       if (parent) notifySafe({ ...notification, title: "Laporan tugas turunan dikirim", userIds: parent.assignedTo || [] });
-      await updateTask(task.id, { status: "submitted" });
+      await updateTaskAndDailyReports(task.id, { status: "submitted" });
       await syncTimeStatus(task.id, tasks, "submitted");
     } catch (error) { window.alert(error.message); }
     input.disabled = false;
@@ -431,6 +433,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
   overlay.querySelectorAll("[data-report-action]").forEach((button) => button.addEventListener("click", async () => {
     const note = window.prompt("Catatan review (opsional):", "") || "";
     await reviewTaskReport(button.dataset.reportId, { status: button.dataset.reportAction, reviewedBy: profile.uid, reviewNote: note, reviewedAt: getJakartaISO() });
+    await syncDailyReportTask({ taskId: button.dataset.taskId, reportId: button.dataset.reportId, reportStatus: button.dataset.reportAction });
     const report = reports.find((item) => item.id === button.dataset.reportId);
     const task = tasks.find((item) => item.id === button.dataset.taskId);
     logAuditSafe({ profile, action: button.dataset.reportAction === "approved" ? "report_approved" : "report_revision_requested", targetType: "taskReport", targetId: button.dataset.reportId, businessId: task?.businessId || report?.businessId || null, metadata: { taskId: button.dataset.taskId, reviewNote: note } });
@@ -446,7 +449,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
         userIds: [report.userId],
       });
     }
-    await updateTask(button.dataset.taskId, { status: button.dataset.reportAction === "approved" ? "approved" : "revision" });
+    await updateTaskAndDailyReports(button.dataset.taskId, { status: button.dataset.reportAction === "approved" ? "approved" : "revision" });
     await syncTimeStatus(button.dataset.taskId, tasks, button.dataset.reportAction === "approved" ? "approved" : "revision");
     if (task?.parentTaskId) await syncParentProgress(task.parentTaskId, tasks, profile);
     await reload();
@@ -504,15 +507,17 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
     button.disabled = true;
     try {
       const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: "", checklist: [], isFinal: true });
+      await syncDailyReportTask({ taskId: task.id, userId: profile.uid, reportId: report.id, reportStatus: "submitted" });
       logAuditSafe({ profile, action: "final_report_submitted", targetType: "taskReport", targetId: report?.id || null, businessId: task.businessId, metadata: { taskId: task.id } });
       notifySafe({ type: NOTIFICATION_TYPES.reportSubmitted, title: "Laporan akhir Admin dikirim", body: description, organizationId: task.organizationId, businessId: task.businessId, targetType: "taskReport", targetId: report?.id || null, audience: "owner" });
-      await updateTask(task.id, { status: "submitted" });
+      await updateTaskAndDailyReports(task.id, { status: "submitted" });
       await reload();
     } catch (error) { window.alert(error.message); button.disabled = false; }
   }));
   overlay.querySelectorAll("[data-final-action]").forEach((button) => button.addEventListener("click", async () => {
     const note = window.prompt("Catatan review akhir (opsional):", "") || "";
     await reviewTaskReport(button.dataset.finalReportId, { status: button.dataset.finalAction, reviewedBy: profile.uid, reviewNote: note, reviewedAt: getJakartaISO() });
+    await syncDailyReportTask({ taskId: button.dataset.finalTaskId, reportId: button.dataset.finalReportId, reportStatus: button.dataset.finalAction });
     const task = tasks.find((item) => item.id === button.dataset.finalTaskId);
     logAuditSafe({ profile, action: button.dataset.finalAction === "approved" ? "final_report_approved" : "final_report_revision_requested", targetType: "taskReport", targetId: button.dataset.finalReportId, businessId: task?.businessId || null, metadata: { taskId: button.dataset.finalTaskId, reviewNote: note } });
     const finalReport = reports.find((item) => item.id === button.dataset.finalReportId);
@@ -528,7 +533,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
         userIds: [finalReport.userId],
       });
     }
-    await updateTask(button.dataset.finalTaskId, { status: button.dataset.finalAction === "approved" ? "approved" : "in-progress" });
+    await updateTaskAndDailyReports(button.dataset.finalTaskId, { status: button.dataset.finalAction === "approved" ? "approved" : "in-progress" });
     await syncTimeStatus(button.dataset.finalTaskId, tasks, button.dataset.finalAction === "approved" ? "approved" : "in-progress");
     await reload();
   }));
@@ -539,8 +544,9 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
     button.disabled = true;
     try {
       await reviewTaskReport(report.id, { status: "submitted", description, reviewedAt: getJakartaISO() });
+      await syncDailyReportTask({ taskId: button.dataset.finalTaskId, reportId: report.id, reportStatus: "submitted" });
       logAuditSafe({ profile, action: "final_report_resubmitted", targetType: "taskReport", targetId: report.id, metadata: { taskId: button.dataset.finalTaskId } });
-      await updateTask(button.dataset.finalTaskId, { status: "submitted" });
+      await updateTaskAndDailyReports(button.dataset.finalTaskId, { status: "submitted" });
       await reload();
     } catch (error) { window.alert(error.message); button.disabled = false; }
   }));
@@ -555,7 +561,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
     const task = tasks.find((item) => item.id === button.dataset.taskCancel);
     button.disabled = true;
     try {
-      await updateTask(task.id, { status: "cancelled" });
+      await updateTaskAndDailyReports(task.id, { status: "cancelled" });
       logAuditSafe({ profile, action: "task_cancelled", targetType: "task", targetId: task.id, businessId: task.businessId });
       if (task.parentTaskId) await syncParentProgress(task.parentTaskId, tasks, profile);
       await reload();

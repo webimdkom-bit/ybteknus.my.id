@@ -4,6 +4,7 @@ import { assertActiveActor } from "../server/shared/actor.js";
 import { verifyFirebaseToken } from "../server/shared/auth.js";
 import { parseBody, requirePost, sendJson } from "../server/shared/http.js";
 import { jakartaNow } from "../server/shared/time.js";
+import { dailyReportKey, isDailyReportReady } from "../src/lib/utils/daily-report.js";
 
 function fail(res, status, message) {
   return sendJson(res, status, { error: message });
@@ -44,6 +45,10 @@ export default async function handler(req, res) {
   const target = attendanceQuery.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
     .find((event) => event.businessId === businessId && event.attendanceDate === correctionDate && event.type === correctionType);
   if (!target) return fail(res, 404, "Absensi yang dikoreksi tidak ditemukan.");
+  if (correctionType === "check-out") {
+    const reportSnapshot = await db.collection("dailyReports").doc(dailyReportKey(targetUserId, correctionDate)).get();
+    if (!isDailyReportReady(reportSnapshot.data()?.status)) return fail(res, 409, "Laporan harian belum disubmit.");
+  }
 
   const before = {
     recordedTime: target.recordedTime || null,

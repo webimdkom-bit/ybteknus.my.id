@@ -17,6 +17,7 @@ import { openRequestManager } from "./features/requests/request-view.js";
 import { openTaskManager } from "./features/tasks/task-view.js";
 import { openAuditViewer } from "./features/audit-trail/audit-view.js";
 import { openReportViewer } from "./features/reports/report-view.js";
+import { openDailyReportViewer } from "./features/reports/daily-report-view.js";
 import { initNotificationBadges, stopNotificationBadges } from "./features/notifications/notification-view.js";
 import { openProfileEditor } from "./features/employees/profile-editor.js";
 import { openFileManager } from "./features/files/file-view.js";
@@ -94,6 +95,7 @@ function renderOwnerDashboard(profile) {
        <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal & shift</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
        <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>${profile?.role === "owner" ? "08" : "06"}</b></a>
         <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>${profile?.role === "owner" ? "09" : "07"}</b></a>
+        <a class="nav-item" href="#daily-report" data-open-daily-report><i data-lucide="file-text"></i><span>Laporan harian</span><b>${profile?.role === "owner" ? "11" : "08"}</b></a>
         <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>10</b></a>
         <div class="org-switch-wrap"><button class="nav-item org-switch-button" type="button" data-org-switch><i data-lucide="building-2"></i><span data-org-label>Memuat organization...</span><i data-lucide="chevron-down"></i></button><div class="org-switch-menu" data-org-menu hidden></div></div>
         <a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>12</b></a>
@@ -226,6 +228,7 @@ function renderOwnerDashboard(profile) {
   });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
   document.querySelectorAll("[data-open-reports]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); }));
+  document.querySelectorAll("[data-open-daily-report]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openDailyReportViewer({ profile }); }));
   document.querySelector("[data-open-files]")?.addEventListener("click", (event) => { event.preventDefault(); openFileManager({ profile }); });
   wireOrganizationSwitcher(profile);
   wireDateFilters(profile, () => refreshDashboard(profile));
@@ -288,6 +291,7 @@ function renderAdminDashboard(profile) {
           ${can("manageSchedules") ? `<a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal & shift</span><b>04</b></a>` : ""}
           ${can("manageTasks", "viewReports") ? `<a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>05</b></a>` : ""}
           ${can("viewReports", "reviewSubmissions") ? `<a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>06</b></a>` : ""}
+          ${perms.length ? `<a class="nav-item" href="#daily-report" data-open-daily-report><i data-lucide="file-text"></i><span>Laporan harian</span><b>07</b></a>` : ""}
           ${perms.length ? `<a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>07</b></a>` : ""}
           ${can("viewReports", "manageTasks") ? `<a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>08</b></a>` : ""}
         </nav>
@@ -317,6 +321,7 @@ function renderAdminDashboard(profile) {
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
   document.querySelector("[data-open-audit]")?.addEventListener("click", (event) => { event.preventDefault(); openAuditViewer({ profile }); });
   document.querySelectorAll("[data-open-reports]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openReportViewer({ profile }); }));
+  document.querySelectorAll("[data-open-daily-report]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openDailyReportViewer({ profile }); }));
   document.querySelector("[data-open-files]")?.addEventListener("click", (event) => { event.preventDefault(); openFileManager({ profile }); });
 }
 
@@ -333,6 +338,7 @@ function renderEmployeeDashboard(profile) {
           <a class="nav-item" href="#employee-schedule"><i data-lucide="calendar-days"></i><span>Jadwal</span><b>03</b></a>
           <a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>04</b></a>
           <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas saya</span><b>05</b></a>
+          <a class="nav-item" href="#daily-report" data-open-daily-report><i data-lucide="file-text"></i><span>Laporan harian</span><b>06</b></a>
         </nav>
         <div class="sidebar-bottom"><div class="profile-mini"><div class="avatar">${initials(profile?.displayName)}</div><div><strong>${profile?.displayName || "User"}</strong><span>Employee · YB Tech</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
       </aside>
@@ -353,6 +359,7 @@ function renderEmployeeDashboard(profile) {
   document.querySelectorAll("[data-open-attendance]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openAttendancePanel({ profile }); }));
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
+  document.querySelectorAll("[data-open-daily-report]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openDailyReportViewer({ profile }); }));
   document.querySelector("[data-open-profile]")?.addEventListener("click", (event) => { event.preventDefault(); openProfileEditor(profile); });
   loadEmployeeDashboardData(profile);
 }

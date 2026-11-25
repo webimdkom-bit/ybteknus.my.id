@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/firebase.js";
 import { BUSINESS_STATUS, normalizeBusinessChanges, normalizeBusinessFields } from "../utils/business.js";
+import { dailyReportKey } from "../utils/daily-report.js";
 
 const MAX_LIST = 200;
 
@@ -33,6 +34,7 @@ export const COLLECTIONS = Object.freeze({
   REQUESTS: "requests",
   TASKS: "tasks",
   TASK_REPORTS: "taskReports",
+  DAILY_REPORTS: "dailyReports",
   ATTENDANCE: "attendance",
   AUDIT_LOGS: "auditLogs",
   NOTIFICATIONS: "notifications",
@@ -683,11 +685,11 @@ export async function updateTask(taskId, changes) {
 }
 
 export function archiveTask(taskId, actorId) {
-  return updateTask(taskId, { archived: true, archivedAt: serverTimestamp(), archivedBy: actorId });
+  return updateTaskAndDailyReports(taskId, { archived: true, archivedAt: serverTimestamp(), archivedBy: actorId });
 }
 
 export function restoreTask(taskId) {
-  return updateTask(taskId, { archived: false, archivedAt: null, archivedBy: null });
+  return updateTaskAndDailyReports(taskId, { archived: false, archivedAt: null, archivedBy: null });
 }
 
 export async function createTaskReport(report) {
@@ -698,6 +700,93 @@ export async function createTaskReport(report) {
     updatedAt: serverTimestamp(),
   });
   return { id: reference.id, ...report, status: "submitted" };
+}
+
+export async function getDailyReport(userId, reportDate) {
+  const snapshot = await getDoc(doc(db, COLLECTIONS.DAILY_REPORTS, dailyReportKey(userId, reportDate)));
+  return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+}
+
+export async function saveDailyReport({ profile, reportDate, report }) {
+  const reference = doc(db, COLLECTIONS.DAILY_REPORTS, dailyReportKey(profile.uid, reportDate));
+  await setDoc(reference, {
+    ...report,
+    userId: profile.uid,
+    organizationId: profile.organizationId,
+    businessIds: profile.businessIds || [],
+    role: profile.role,
+    displayName: profile.displayName || "",
+    email: profile.email || "",
+    reportDate,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+  return { id: reference.id, ...report, userId: profile.uid, organizationId: profile.organizationId, reportDate };
+}
+
+export async function reviewDailyReport(reportId, changes) {
+  await updateDoc(doc(db, COLLECTIONS.DAILY_REPORTS, reportId), {
+    ...changes,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function listDailyReportsForUser(userId, from, to) {
+  const constraints = [where("userId", "==", userId)];
+  if (from) constraints.push(where("reportDate", ">=", from));
+  if (to) constraints.push(where("reportDate", "<=", to));
+  const result = await getDocs(query(collection(db, COLLECTIONS.DAILY_REPORTS), ...constraints, orderBy("reportDate", "desc")));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function listDailyReportsForOrganization(organizationId, reportDate, businessId = null) {
+  const constraints = [where("organizationId", "==", organizationId)];
+  if (reportDate) constraints.push(where("reportDate", "==", reportDate));
+  if (businessId) constraints.push(where("businessIds", "array-contains", businessId));
+  const result = await getDocs(query(collection(db, COLLECTIONS.DAILY_REPORTS), ...constraints));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function syncDailyReportTask({ taskId, task = {}, userId = null, reportId = null, reportStatus = null }) {
+  const snapshot = await getDocs(query(collection(db, COLLECTIONS.DAILY_REPORTS), where("taskIds", "array-contains", taskId)));
+  if (!snapshot.docs.length) return;
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((docSnapshot) => {
+    const data = docSnapshot.data();
+    if (userId && data.userId !== userId) return;
+    const entries = (data.tasks || []).map((entry) => {
+      if (entry.taskId !== taskId) return entry;
+      return {
+        ...entry,
+        taskStatus: task.status || entry.taskStatus,
+        completed: task.status === "approved",
+        progress: Number(task.progress || 0),
+        archived: Boolean(task.archived),
+        reportId: reportId || entry.reportId || null,
+        reportStatus: reportStatus || entry.reportStatus || null,
+        updatedAt: serverTimestamp(),
+      };
+    });
+    batch.update(docSnapshot.ref, { tasks: entries, updatedAt: serverTimestamp() });
+  });
+  await batch.commit();
+}
+
+export async function updateTaskAndDailyReports(taskId, changes, options = {}) {
+  await updateTask(taskId, changes);
+  const snapshot = await getDoc(doc(db, COLLECTIONS.TASKS, taskId));
+  if (snapshot.exists()) {
+    await syncDailyReportTask({ taskId, task: snapshot.data(), userId: options.userId || null, reportId: options.reportId || null, reportStatus: options.reportStatus || null });
+  }
+}
+
+export async function listFilesForTarget(organizationId, targetType, targetId) {
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.FILES),
+    where("organizationId", "==", organizationId),
+    where("targetType", "==", targetType),
+    where("targetId", "==", targetId),
+  ));
+  return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
 export async function listTaskReportsForUser(userId) {

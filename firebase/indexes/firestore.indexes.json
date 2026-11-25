@@ -159,6 +159,48 @@
         { "fieldPath": "organizationId", "order": "ASCENDING" },
         { "fieldPath": "businessId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "files",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "targetType", "order": "ASCENDING" },
+        { "fieldPath": "targetId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "reportDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "businessIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "reportDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "reportDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "taskIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "reportDate", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

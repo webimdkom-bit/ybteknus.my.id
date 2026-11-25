@@ -6,6 +6,7 @@ import { parseBody, requirePost, sendJson } from "../server/shared/http.js";
 import { jakartaNow } from "../server/shared/time.js";
 import { calculateDistanceMeters, getLocationStatus } from "../src/lib/utils/geo.js";
 import { calculateAttendanceTiming, pickActiveSchedule, toMinutes } from "../src/features/schedules/schedule-calculations.js";
+import { dailyReportKey, isDailyReportReady } from "../src/lib/utils/daily-report.js";
 
 function fail(res, status, message) {
   return sendJson(res, status, { error: message });
@@ -73,6 +74,10 @@ export default async function handler(req, res) {
   if (type === "check-in" && checkInEvent) return fail(res, 409, "Anda sudah melakukan check-in hari ini.");
   if (type === "check-out" && !checkInEvent) return fail(res, 409, "Check-in belum tercatat hari ini.");
   if (type === "check-out" && checkOutEvent) return fail(res, 409, "Anda sudah melakukan check-out hari ini.");
+  if (type === "check-out") {
+    const reportSnapshot = await db.collection("dailyReports").doc(dailyReportKey(actor.uid, attendanceDate)).get();
+    if (!isDailyReportReady(reportSnapshot.data()?.status)) return fail(res, 409, "Laporan harian belum disubmit.");
+  }
 
   const scheduleQuery = await db.collection("schedules").where("userId", "==", actor.uid).get();
   const assignment = pickActiveSchedule(scheduleQuery.docs.map((doc) => ({ id: doc.id, ...doc.data() })), { businessId, date: attendanceDate });

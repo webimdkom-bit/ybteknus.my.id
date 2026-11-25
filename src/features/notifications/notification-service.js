@@ -23,6 +23,9 @@ export const NOTIFICATION_TYPES = Object.freeze({
   reportSubmitted: "report_submitted",
   revisionRequested: "revision_requested",
   reportApproved: "report_approved",
+  dailyReportSubmitted: "daily_report_submitted",
+  dailyReportReviewed: "daily_report_reviewed",
+  dailyReportRevisionRequested: "daily_report_revision_requested",
 });
 
 export async function notify(payload) {

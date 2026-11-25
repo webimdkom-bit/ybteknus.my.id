@@ -262,6 +262,37 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /dailyReports/{reportId} {
+      allow read: if activeUser()
+        && (ownUser(resource.data.userId)
+          || (isOwner() && resource.data.organizationId == currentUser().organizationId)
+          || (isAdmin()
+            && resource.data.organizationId == currentUser().organizationId
+            && resource.data.businessIds.hasAny(currentUser().businessIds)));
+      allow create: if activeUser()
+        && ownUser(request.resource.data.userId)
+        && sameOrganization(request.resource.data.organizationId)
+        && request.resource.data.status in ['draft', 'submitted'];
+      allow update: if (activeUser()
+          && ownUser(resource.data.userId)
+          && ownUser(request.resource.data.userId)
+          && sameOrganization(resource.data.organizationId)
+          && resource.data.status != 'reviewed'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notes', 'tasks', 'attachments', 'status', 'submittedAt', 'updatedAt']))
+        || (activeUser()
+          && ownUser(resource.data.userId)
+          && sameOrganization(resource.data.organizationId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tasks', 'updatedAt']))
+        || (isOwner()
+          && sameOrganization(resource.data.organizationId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'tasks', 'reviewedBy', 'reviewedAt', 'reviewNote', 'updatedAt']))
+        || (isAdmin()
+          && resource.data.organizationId == currentUser().organizationId
+          && resource.data.businessIds.hasAny(currentUser().businessIds)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'tasks', 'reviewedBy', 'reviewedAt', 'reviewNote', 'updatedAt']));
+      allow delete: if false;
+    }
+
     match /auditLogs/{auditId} {
       allow read: if (isOwner() && resource.data.organizationId == currentUser().organizationId)
         || (isAdmin()

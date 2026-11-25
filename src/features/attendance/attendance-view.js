@@ -1,6 +1,9 @@
-import { getBusiness, listBusinessesForOrganization } from "../../lib/firestore/repositories.js";
+import { getBusiness, getDailyReport, listBusinessesForOrganization } from "../../lib/firestore/repositories.js";
 import { getDailyAttendance, parseGoogleMapsCoordinates, recordGpsAttendance, saveBusinessLocation } from "./attendance-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
+import { getDateKey } from "../../lib/utils/time.js";
+import { isDailyReportReady } from "../../lib/utils/daily-report.js";
+import { openDailyReportViewer } from "../reports/daily-report-view.js";
 
 export async function openLocationSettings({ profile }) {
   const businesses = await listBusinessesForOrganization(profile.organizationId);
@@ -60,6 +63,7 @@ export async function openAttendancePanel({ profile }) {
       <div class="attendance-modal-head"><div><p class="eyebrow">TODAY'S ATTENDANCE</p><h2 id="attendance-title">Absensi hari ini</h2><p>GPS akan digunakan untuk memvalidasi lokasi Anda.</p></div><button class="icon-button attendance-close" aria-label="Tutup">×</button></div>
       <div class="gps-status"><div class="gps-orb">GPS</div><div><strong>Location check</strong><span>Pastikan izin lokasi browser aktif.</span></div></div>
       <div class="attendance-action-grid"><button class="primary-button" data-attendance-type="check-in">Check-in <span>→</span></button><button class="secondary-button" data-attendance-type="check-out">Check-out <span>→</span></button></div>
+      <div class="attendance-report-actions"><button class="text-button" data-attendance-daily-report>Buka laporan harian</button></div>
       <p class="attendance-result" role="status">Belum ada aktivitas hari ini.</p><p class="attendance-error" role="alert"></p>
     </section>
   `;
@@ -75,18 +79,24 @@ export async function openAttendancePanel({ profile }) {
       return;
     }
     try {
-      const dailyAttendance = await getDailyAttendance({ userId: profile.uid, businessId });
+      const [dailyAttendance, dailyReport] = await Promise.all([
+        getDailyAttendance({ userId: profile.uid, businessId }),
+        getDailyReport(profile.uid, getDateKey()),
+      ]);
+      const reportReady = isDailyReportReady(dailyReport?.status);
       const checkInButton = overlay.querySelector('[data-attendance-type="check-in"]');
       const checkOutButton = overlay.querySelector('[data-attendance-type="check-out"]');
       checkInButton.disabled = Boolean(dailyAttendance.checkIn);
-      checkOutButton.disabled = !dailyAttendance.checkIn || Boolean(dailyAttendance.checkOut);
+      checkOutButton.disabled = !dailyAttendance.checkIn || Boolean(dailyAttendance.checkOut) || !reportReady;
       if (dailyAttendance.checkOut) result.textContent = `Check-out ${dailyAttendance.checkOut.recordedTime || "tercatat"}. Status: ${dailyAttendance.checkOut.attendanceStatus || "tercatat"}.`;
+      else if (dailyAttendance.checkIn && !reportReady) result.textContent = `Check-in ${dailyAttendance.checkIn.recordedTime || "tercatat"}. Kirim laporan harian sebelum check-out.`;
       else if (dailyAttendance.checkIn) result.textContent = `Check-in ${dailyAttendance.checkIn.recordedTime || "tercatat"}. Menunggu check-out.`;
       else result.textContent = "Belum ada aktivitas hari ini.";
     } catch (error) {
       overlay.querySelector(".attendance-error").textContent = error.message;
     }
   };
+  overlay.querySelector("[data-attendance-daily-report]")?.addEventListener("click", () => openDailyReportViewer({ profile }));
   attendanceButtons.forEach((button) => button.addEventListener("click", async () => {
     const error = overlay.querySelector(".attendance-error");
     error.textContent = "";
