@@ -215,9 +215,36 @@ body { min-width: 0; }
 .employee-assignee-actions { display: flex; gap: 12px; margin-top: 7px; }
 .schedule-message { color: #62801c; font-size: 10px; min-height: 14px; margin: 4px 0; }
 
+.field textarea { width: 100%; border: 1px solid #d9e0d8; background: #fff; color: #263538; padding: 13px 12px; font: inherit; font-size: 12px; border-radius: 0; outline: none; resize: vertical; }
+.field textarea:focus { border-color: #8da82e; }
+.task-assignee-list { background: #fff; }
+.task-assignee-picker { display: grid; gap: 8px; }
+.task-assignee-search { width: 100%; border: 1px solid #d9e0d8; background: #fff; color: #263538; padding: 10px 12px; font: inherit; font-size: 12px; outline: none; }
+.task-assignee-selected { display: flex; gap: 6px; flex-wrap: wrap; min-height: 20px; }
+.task-assignee-chip { background: #dfeab7; color: #526c15; padding: 5px 8px; font-size: 10px; }
+.task-assignee-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #7a8785; font-size: 10px; }
+.task-assignee-group h4 { color: #899392; font-size: 9px; letter-spacing: .1em; margin: 4px 0 2px; text-transform: uppercase; }
+.task-assignee-option { display: flex; align-items: center; gap: 8px; border: 1px solid #e7ece5; background: #fff; padding: 7px 8px; cursor: pointer; }
+.task-assignee-option:has(input:checked) { background: #dfeab7; border-color: #bddc4a; }
+.task-assignee-avatar { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; background: #263538; color: #f4f6f1; font-size: 10px; }
+.task-assignee-copy { flex: 1; min-width: 0; }
+.task-assignee-copy strong, .task-assignee-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-assignee-copy strong { font-size: 11px; color: #2b3a3d; }
+.task-assignee-copy small { color: #899392; font-size: 9px; margin-top: 2px; }
+.task-assignee-role { color: #526c15; font-size: 8px; font-weight: 600; text-transform: uppercase; }
+.task-list-toolbar { display: grid; grid-template-columns: minmax(140px, 1.4fr) repeat(5, minmax(100px, 1fr)); gap: 7px; padding: 10px 0; }
+.task-list-toolbar input, .task-list-toolbar select { width: 100%; min-width: 0; border: 1px solid #d9e0d8; background: #fff; color: #263538; padding: 8px 9px; font: inherit; font-size: 10px; outline: none; }
+.task-list-toolbar input:focus, .task-list-toolbar select:focus { border-color: #8da82e; }
+.task-list-range { color: #899392; font-size: 10px; margin: 0 0 8px; }
+.task-list-scroll { max-height: min(60vh, 620px); overflow: auto; overscroll-behavior: contain; padding-right: 4px; }
+.task-row.is-archived { opacity: .6; background: #f6f7f4; }
+
 @media (max-width: 720px) {
   .employee-manager-grid, .employee-filter-row { grid-template-columns: 1fr !important; }
   .employee-manager-row { grid-template-columns: 31px minmax(0, 1fr); }
   .owner-employee-actions, .employee-transfer-form, .employee-manager-row .registration-error { grid-column: 2; }
   .owner-employee-actions button, .employee-transfer-form button, .employee-transfer-form select { min-height: 44px; font-size: 11px; }
+  .task-list-toolbar { grid-template-columns: 1fr 1fr !important; }
+  .task-list-toolbar input, .task-list-toolbar select { min-height: 44px; font-size: 11px; }
+  .task-list-scroll { max-height: none; overflow: visible; }
 }

@@ -600,17 +600,23 @@ export async function createTask(task) {
   return { id: reference.id, ...task, status: "assigned", progress: 0 };
 }
 
-export async function listTasksForOrganization(organizationId) {
-  const result = await getDocs(query(collection(db, COLLECTIONS.TASKS), where("organizationId", "==", organizationId), limit(MAX_LIST)));
+export async function listTasksForOrganization(organizationId, max = MAX_LIST) {
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.TASKS),
+    where("organizationId", "==", organizationId),
+    orderBy("createdAt", "desc"),
+    limit(max),
+  ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
-export async function listTasksForBusiness(organizationId, businessId) {
+export async function listTasksForBusiness(organizationId, businessId, max = MAX_LIST) {
   const result = await getDocs(query(
     collection(db, COLLECTIONS.TASKS),
     where("organizationId", "==", organizationId),
     where("businessId", "==", businessId),
-    limit(MAX_LIST),
+    orderBy("createdAt", "desc"),
+    limit(max),
   ));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
@@ -625,9 +631,9 @@ export async function listTasksForUser(userId, max = MAX_LIST) {
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
-export function watchTasksForOrganization(organizationId, callback, onError) {
+export function watchTasksForOrganization(organizationId, callback, onError, max = MAX_LIST) {
   return onSnapshot(
-    query(collection(db, COLLECTIONS.TASKS), where("organizationId", "==", organizationId), limit(MAX_LIST)),
+    query(collection(db, COLLECTIONS.TASKS), where("organizationId", "==", organizationId), orderBy("createdAt", "desc"), limit(max)),
     (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
     (error) => {
       console.warn("[tasks] listener:", error?.code || error?.message || error);
@@ -636,13 +642,14 @@ export function watchTasksForOrganization(organizationId, callback, onError) {
   );
 }
 
-export function watchTasksForBusiness(organizationId, businessId, callback, onError) {
+export function watchTasksForBusiness(organizationId, businessId, callback, onError, max = MAX_LIST) {
   return onSnapshot(
     query(
       collection(db, COLLECTIONS.TASKS),
       where("organizationId", "==", organizationId),
       where("businessId", "==", businessId),
-      limit(MAX_LIST),
+      orderBy("createdAt", "desc"),
+      limit(max),
     ),
     (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
     (error) => {
@@ -673,6 +680,14 @@ export async function updateTask(taskId, changes) {
     ...changes,
     updatedAt: serverTimestamp(),
   });
+}
+
+export function archiveTask(taskId, actorId) {
+  return updateTask(taskId, { archived: true, archivedAt: serverTimestamp(), archivedBy: actorId });
+}
+
+export function restoreTask(taskId) {
+  return updateTask(taskId, { archived: false, archivedAt: null, archivedBy: null });
 }
 
 export async function createTaskReport(report) {

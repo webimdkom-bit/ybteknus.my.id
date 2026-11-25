@@ -17,6 +17,7 @@ import {
 } from "../../lib/firestore/repositories.js";
 import { formatInAppZone, getDateKey } from "../../lib/utils/time.js";
 import { isScheduleEffective } from "../schedules/schedule-calculations.js";
+import { isTaskOverdue } from "../tasks/task-status.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LATE_STATUSES = new Set(["terlambat", "terlambat dan pulang lebih awal"]);
@@ -79,7 +80,7 @@ function countAttendance(events, expectedUserIds) {
 
 function countTasks(tasks, reports, today) {
   const running = tasks.filter((task) => ["in-progress", "submitted", "revision"].includes(task.status));
-  const overdue = tasks.filter((task) => task.deadline && task.deadline < today && !["approved", "cancelled"].includes(task.status));
+  const overdue = tasks.filter((task) => isTaskOverdue(task));
   const approved = tasks.filter((task) => task.status === "approved");
   const pendingReviews = reports.filter((report) => report.status === "submitted");
   const completion = tasks.length ? Math.round((approved.length / tasks.length) * 100) : 0;

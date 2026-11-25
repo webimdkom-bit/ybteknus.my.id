@@ -1,5 +1,6 @@
 import { auth } from "../../lib/firebase/firebase.js";
 import { getDateKey } from "../../lib/utils/time.js";
+import { formatTaskDeadline, getDeadlineDate } from "../tasks/task-status.js";
 import {
   listTasksForBusiness,
   listTasksForOrganization,
@@ -44,7 +45,7 @@ export function notifySafe(payload) {
 
 function daysUntil(deadline) {
   const today = new Date(`${getDateKey()}T00:00:00+07:00`);
-  const target = new Date(`${deadline}T00:00:00+07:00`);
+  const target = new Date(`${getDeadlineDate(deadline)}T00:00:00+07:00`);
   return Math.round((target - today) / 86400000);
 }
 
@@ -69,7 +70,7 @@ export async function syncDeadlineNotifications(profile) {
     notifySafe({
       type,
       title: remaining < 0 ? "Tugas terlambat" : "Deadline mendekat",
-      body: `${task.title} · deadline ${task.deadline}`,
+      body: `${task.title} · deadline ${formatTaskDeadline(task.deadline)}`,
       organizationId: task.organizationId,
       businessId: task.businessId,
       targetType: "task",

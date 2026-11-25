@@ -9,7 +9,7 @@ const ALLOWED_ACTIONS = new Set([
   "login", "logout",
   "employee_approved", "employee_rejected",
   "organization_created",
-  "task_created", "task_progress_updated", "task_cancelled", "subtask_created",
+  "task_created", "task_progress_updated", "task_cancelled", "subtask_created", "task_archived", "task_restored",
   "report_submitted", "report_approved", "report_revision_requested",
   "final_report_submitted", "final_report_resubmitted", "final_report_approved", "final_report_revision_requested",
   "file_uploaded", "file_deleted",
