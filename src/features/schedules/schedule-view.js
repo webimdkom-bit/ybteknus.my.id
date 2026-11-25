@@ -27,7 +27,7 @@ export async function openScheduleManager({ profile, onClose }) {
           <form class="shift-form assignment-form" id="assignment-form">
             <h3>Tetapkan jadwal karyawan</h3>
             <p class="field-hint">Jadwal yang ditetapkan langsung dipakai karyawan untuk check-in/check-out pada tanggal tersebut.</p>
-            <div class="field"><label>Karyawan <span>(bisa lebih dari satu)</span></label><div class="employee-assignee-list" id="assign-employees"><p class="task-empty">Memuat karyawan...</p></div><div class="employee-assignee-actions"><button class="text-button" type="button" data-assignee-all>Pilih semua</button><button class="text-button" type="button" data-assignee-none>Kosongkan</button></div></div>
+            <div class="field"><label>Karyawan <span>(karyawan sesuai bisnis)</span></label><div class="task-assignee-list" id="assign-employees"><p class="task-empty">Memuat karyawan...</p></div></div>
             <div class="field"><label for="assign-shift">Shift</label><select id="assign-shift" required><option value="">Pilih shift</option></select></div>
             <div class="schedule-fields"><div class="field"><label for="assign-date">Tanggal jadwal</label><input id="assign-date" type="date" required /></div><div class="field"><label for="assign-effective">Tanggal efektif</label><input id="assign-effective" type="date" required /></div></div>
             <p class="schedule-error" role="alert"></p><p class="schedule-message" role="status"></p><button class="primary-button" type="submit">Tetapkan jadwal <span>→</span></button>
@@ -74,20 +74,14 @@ export async function openScheduleManager({ profile, onClose }) {
       if (businessId) {
         const employees = await listEmployeesForBusiness(organizationId, businessId);
         employeeList.innerHTML = employees.length
-          ? employees.map((employee) => `<label><input type="checkbox" value="${employee.id}" data-assign-employee="${employee.id}" /> ${employee.displayName || employee.email}</label>`).join("")
-          : `<p class="task-empty">Belum ada karyawan</p>`;
+          ? employees.map((employee) => `<label class="task-assignee-option"><input type="checkbox" value="${employee.id}" data-assign-employee="${employee.id}" /><span>${escapeHtml(employee.displayName || employee.email || "Tanpa nama")}</span></label>`).join("")
+          : `<p class="task-empty">Belum ada karyawan pada bisnis ini.</p>`;
       } else {
         employeeList.innerHTML = `<p class="task-empty">Pilih bisnis terlebih dahulu.</p>`;
       }
     } catch (error) { list.innerHTML = `<p class="shift-error">${error.message}</p>`; }
   };
   businessSelect.addEventListener("change", () => { businessId = businessSelect.value || null; loadShifts(); });
-  overlay.querySelector("[data-assignee-all]").addEventListener("click", () => {
-    employeeList.querySelectorAll("[data-assign-employee]").forEach((input) => { input.checked = true; });
-  });
-  overlay.querySelector("[data-assignee-none]").addEventListener("click", () => {
-    employeeList.querySelectorAll("[data-assign-employee]").forEach((input) => { input.checked = false; });
-  });
   await loadShifts();
 
   overlay.querySelector("#shift-form").addEventListener("submit", async (event) => {

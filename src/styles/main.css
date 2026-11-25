@@ -209,10 +209,6 @@ body { min-width: 0; }
 .employee-transfer-form { grid-column: 2 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
 .employee-transfer-form select { flex: 1; min-width: 140px; border: 1px solid #d9e0d8; background: #fff; color: #263538; padding: 7px 9px; font-size: 10px; }
 .employee-manager-row .registration-error { grid-column: 2 / -1; }
-.employee-assignee-list { display: grid; gap: 6px; max-height: 140px; overflow: auto; border: 1px solid #dfe4dc; background: #fff; padding: 8px; }
-.employee-assignee-list label { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #667371; }
-.employee-assignee-list input { accent-color: #8da82e; }
-.employee-assignee-actions { display: flex; gap: 12px; margin-top: 7px; }
 .schedule-message { color: #62801c; font-size: 10px; min-height: 14px; margin: 4px 0; }
 
 .field textarea { width: 100%; border: 1px solid #d9e0d8; background: #fff; color: #263538; padding: 13px 12px; font: inherit; font-size: 12px; border-radius: 0; outline: none; resize: vertical; }

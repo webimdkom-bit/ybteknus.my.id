@@ -38,10 +38,12 @@ describe("bulk schedule assignment wiring", () => {
     expect(repositories).toContain("function scheduleKey(");
   });
 
-  it("uses checkbox bulk UI and reports results", () => {
+  it("uses simple employee checkboxes and reports results", () => {
+    expect(view).toContain('class="task-assignee-list" id="assign-employees"');
     expect(view).toContain("data-assign-employee");
-    expect(view).toContain("data-assignee-all");
-    expect(view).toContain("data-assignee-none");
+    expect(view).toContain("listEmployeesForBusiness(organizationId, businessId)");
+    expect(view).not.toContain("data-assignee-all");
+    expect(view).not.toContain("data-assignee-none");
     expect(view).toContain("Dilewati:");
   });
 
