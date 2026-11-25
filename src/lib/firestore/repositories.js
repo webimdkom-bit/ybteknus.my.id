@@ -11,6 +11,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -343,6 +344,35 @@ export async function createSchedule(schedule) {
     updatedAt: serverTimestamp(),
   });
   return { id: reference.id, ...schedule, status: "active" };
+}
+
+function scheduleKey(organizationId, businessId, userId, date) {
+  return [organizationId, businessId, userId, date].map((value) => String(value).replace(/[^a-zA-Z0-9_-]/g, "_")).join("_");
+}
+
+export async function createSchedulesBatch(items) {
+  if (!items.length) return { created: [], skipped: [] };
+  return runTransaction(db, async (transaction) => {
+    const created = [];
+    const skipped = [];
+    for (const item of items) {
+      const reference = doc(db, COLLECTIONS.SCHEDULES, scheduleKey(item.organizationId, item.businessId, item.userId, item.date));
+      const existing = await transaction.get(reference);
+      if (existing.exists()) {
+        skipped.push(item.userId);
+        continue;
+      }
+      const record = {
+        ...item,
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      transaction.set(reference, record);
+      created.push({ id: reference.id, ...record });
+    }
+    return { created, skipped };
+  });
 }
 
 export async function listSchedules({ organizationId, businessId, userId, from, to }) {

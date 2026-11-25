@@ -6,7 +6,7 @@ import {
   listSchedules,
   listShifts,
 } from "../../lib/firestore/repositories.js";
-import { getAttendanceStatus, toMinutes } from "../schedules/schedule-calculations.js";
+import { getAttendanceStatus, pickActiveSchedule, toMinutes } from "../schedules/schedule-calculations.js";
 import { getDateKey } from "../attendance/attendance-service.js";
 
 async function safeList(callback, label) {
@@ -95,7 +95,7 @@ export async function buildAttendanceReport({ profile, from, to, businessId, use
   const rows = [];
   filteredEmployees.forEach((employee) => {
     dates.forEach((date) => {
-      const schedule = schedules.find((item) => item.date === date && item.userId === employee.id && item.status !== "cancelled");
+      const schedule = pickActiveSchedule(schedules.filter((item) => item.userId === employee.id), { businessId: "", date });
       const scope = schedule?.businessId || employee.businessIds?.[0] || "";
       if (businessId && scope !== businessId) return;
       const business = businessMap.get(scope) || { id: scope, name: "-" };

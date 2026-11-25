@@ -28,6 +28,25 @@ export function getAttendanceStatus({ actualIn, actualOut, lateAfterToleranceMin
   return "hadir";
 }
 
+export function isScheduleEffective(schedule, date) {
+  if (!schedule || schedule.status === "cancelled") return false;
+  if (!date || !schedule.date || schedule.date !== date) return false;
+  return !schedule.effectiveFrom || String(schedule.effectiveFrom) <= String(date);
+}
+
+function scheduleTimestamp(value) {
+  if (!value) return 0;
+  if (typeof value.toDate === "function") return value.toDate().getTime();
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+export function pickActiveSchedule(schedules, { businessId, date }) {
+  return schedules
+    .filter((schedule) => isScheduleEffective(schedule, date) && (!businessId || schedule.businessId === businessId))
+    .sort((a, b) => scheduleTimestamp(b.createdAt) - scheduleTimestamp(a.createdAt) || String(b.effectiveFrom || "").localeCompare(String(a.effectiveFrom || "")))[0] || null;
+}
+
 export function toMinutes(value) {
   if (typeof value === "number") return value;
   const [hours, minutes] = String(value).split(":").map(Number);

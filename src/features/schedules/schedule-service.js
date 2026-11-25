@@ -1,10 +1,12 @@
 import {
-  createSchedule,
+  createSchedulesBatch,
   createShift,
+  getShift,
+  listEmployeesForBusiness,
   listSchedules,
   listShifts,
 } from "../../lib/firestore/repositories.js";
-import { calculateAttendanceTiming, getAttendanceStatus, toMinutes } from "./schedule-calculations.js";
+import { calculateAttendanceTiming, getAttendanceStatus, isScheduleEffective, toMinutes } from "./schedule-calculations.js";
 
 export const WEEKDAYS = Object.freeze([
   "monday",
@@ -30,11 +32,55 @@ export async function addShift({ organizationId, businessId, name, startTime, en
   });
 }
 
-export async function assignShift({ organizationId, businessId, userId, shiftId, date, effectiveFrom, assignedBy }) {
-  if (!organizationId || !businessId || !userId || !shiftId || !date) {
-    throw new Error("Business, employee, shift, dan tanggal wajib diisi.");
+export async function assignShiftBulk({ organizationId, businessId, userIds, shiftId, date, effectiveFrom, assignedBy }) {
+  const uniqueIds = [...new Set((userIds || []).filter(Boolean))];
+  if (!organizationId || !businessId || !uniqueIds.length || !shiftId || !date) {
+    throw new Error("Bisnis, karyawan, shift, dan tanggal wajib diisi.");
   }
-  return createSchedule({ organizationId, businessId, userId, shiftId, date, effectiveFrom: effectiveFrom || date, assignedBy });
+  if (uniqueIds.length > 100) throw new Error("Maksimal 100 karyawan per penetapan jadwal.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || (effectiveFrom && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom))) {
+    throw new Error("Format tanggal harus YYYY-MM-DD.");
+  }
+
+  const shift = await getShift(shiftId);
+  if (!shift || shift.status === "inactive" || shift.organizationId !== organizationId || shift.businessId !== businessId) {
+    throw new Error("Shift tidak valid untuk bisnis ini.");
+  }
+
+  const employees = await listEmployeesForBusiness(organizationId, businessId);
+  const validIds = new Set(employees.map((employee) => employee.id));
+  const skipped = uniqueIds.filter((userId) => !validIds.has(userId)).map((userId) => ({ userId, reason: "Karyawan tidak aktif di bisnis ini." }));
+  const candidateIds = uniqueIds.filter((userId) => validIds.has(userId));
+
+  if (candidateIds.length) {
+    const existing = await listSchedules({ organizationId, businessId, from: date, to: date });
+    const conflictIds = new Set(existing.filter((schedule) => isScheduleEffective(schedule, date) && candidateIds.includes(schedule.userId)).map((schedule) => schedule.userId));
+    conflictIds.forEach((userId) => skipped.push({ userId, reason: "Sudah memiliki jadwal aktif pada tanggal ini." }));
+  }
+
+  const batchId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const finalCandidateIds = candidateIds.filter((userId) => !skipped.some((item) => item.userId === userId));
+  const result = await createSchedulesBatch(finalCandidateIds.map((userId) => ({
+    organizationId,
+    businessId,
+    userId,
+    shiftId,
+    date,
+    effectiveFrom: effectiveFrom || date,
+    assignedBy,
+    batchId,
+  })));
+  skipped.push(...result.skipped.map((userId) => ({ userId, reason: "Jadwal sudah dibuat sebelumnya." })));
+  return { created: result.created, skipped, batchId, shift };
+}
+
+export async function assignShift({ organizationId, businessId, userId, shiftId, date, effectiveFrom, assignedBy }) {
+  const result = await assignShiftBulk({ organizationId, businessId, userIds: [userId], shiftId, date, effectiveFrom, assignedBy });
+  if (!result.created.length) {
+    const reason = result.skipped[0]?.reason || "Jadwal sudah dibuat sebelumnya.";
+    throw new Error(reason);
+  }
+  return result.created[0];
 }
 
 export { calculateAttendanceTiming, getAttendanceStatus, listSchedules, listShifts };

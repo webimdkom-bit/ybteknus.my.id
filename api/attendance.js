@@ -5,7 +5,7 @@ import { verifyFirebaseToken } from "../server/shared/auth.js";
 import { parseBody, requirePost, sendJson } from "../server/shared/http.js";
 import { jakartaNow } from "../server/shared/time.js";
 import { calculateDistanceMeters, getLocationStatus } from "../src/lib/utils/geo.js";
-import { calculateAttendanceTiming, toMinutes } from "../src/features/schedules/schedule-calculations.js";
+import { calculateAttendanceTiming, pickActiveSchedule, toMinutes } from "../src/features/schedules/schedule-calculations.js";
 
 function fail(res, status, message) {
   return sendJson(res, status, { error: message });
@@ -75,8 +75,7 @@ export default async function handler(req, res) {
   if (type === "check-out" && checkOutEvent) return fail(res, 409, "Anda sudah melakukan check-out hari ini.");
 
   const scheduleQuery = await db.collection("schedules").where("userId", "==", actor.uid).get();
-  const assignment = scheduleQuery.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-    .find((item) => item.businessId === businessId && item.date === attendanceDate && item.status !== "cancelled");
+  const assignment = pickActiveSchedule(scheduleQuery.docs.map((doc) => ({ id: doc.id, ...doc.data() })), { businessId, date: attendanceDate });
   let shift = null;
   if (assignment?.shiftId) {
     const shiftSnapshot = await db.collection("shifts").doc(assignment.shiftId).get();

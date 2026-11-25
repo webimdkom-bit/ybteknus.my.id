@@ -16,6 +16,7 @@ import {
   listTasksForOrganization,
 } from "../../lib/firestore/repositories.js";
 import { formatInAppZone, getDateKey } from "../../lib/utils/time.js";
+import { isScheduleEffective } from "../schedules/schedule-calculations.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LATE_STATUSES = new Set(["terlambat", "terlambat dan pulang lebih awal"]);
@@ -95,7 +96,7 @@ function countTasks(tasks, reports, today) {
 function buildChartSeries(attendanceEvents, schedules, today) {
   const expectedByDate = new Map();
   schedules.forEach((schedule) => {
-    if (!schedule.date || schedule.status === "cancelled") return;
+    if (!isScheduleEffective(schedule, schedule.date)) return;
     if (!expectedByDate.has(schedule.date)) expectedByDate.set(schedule.date, new Set());
     expectedByDate.get(schedule.date).add(schedule.userId);
   });
@@ -121,7 +122,7 @@ function healthLabel(score) {
 function buildBusinessHealth(businesses, employees, attendanceEvents, schedules, tasks, today) {
   const expectedByBusiness = new Map();
   schedules.forEach((schedule) => {
-    if (!schedule.date || schedule.date !== today || schedule.status === "cancelled") return;
+    if (!isScheduleEffective(schedule, today)) return;
     if (!expectedByBusiness.has(schedule.businessId)) expectedByBusiness.set(schedule.businessId, new Set());
     expectedByBusiness.get(schedule.businessId).add(schedule.userId);
   });
@@ -177,7 +178,7 @@ function buildRecentActivity({ tasks, reports, requests, registrations, business
 }
 
 function buildViewModel({ businesses, employees, attendanceToday, attendanceWeek, schedulesToday, schedulesWeek, registrations, requests, tasks, reports, today }) {
-  const expectedToday = new Set(schedulesToday.filter((schedule) => schedule.status !== "cancelled").map((schedule) => schedule.userId));
+  const expectedToday = new Set(schedulesToday.filter((schedule) => isScheduleEffective(schedule, today)).map((schedule) => schedule.userId));
   if (!expectedToday.size) employees.forEach((employee) => expectedToday.add(employee.id));
   const attendance = countAttendance(attendanceToday, expectedToday);
   const taskSummary = countTasks(tasks, reports, today);

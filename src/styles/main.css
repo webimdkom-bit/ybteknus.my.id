@@ -188,3 +188,36 @@ body { min-width: 0; }
 }
 
 .employee-schedule-card { scroll-margin-top: 160px; }
+
+.employee-manager-grid { display: grid; grid-template-columns: minmax(250px, .8fr) 1.2fr; gap: 24px; padding-top: 18px; }
+.employee-manager-tools { display: grid; align-content: start; gap: 18px; }
+.employee-filter-form, .quick-task-form { display: grid; gap: 10px; border: 1px solid #dfe4dc; background: #fff; padding: 14px; }
+.employee-filter-form h3, .quick-task-form h3 { font-size: 14px; }
+.employee-filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.quick-task-form[hidden] { display: none; }
+.quick-task-form textarea { width: 100%; border: 1px solid #d9e0d8; background: #fff; color: #263538; padding: 10px; font: inherit; font-size: 12px; resize: vertical; }
+.quick-task-form .primary-button { width: 100%; justify-content: space-between; }
+.employee-manager-list-wrap { min-width: 0; }
+.employee-manager-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid #e1e7df; padding-bottom: 12px; }
+.employee-manager-heading h3 { font-size: 14px; }
+.employee-manager-list { padding-top: 8px; }
+.employee-manager-row { display: grid; grid-template-columns: 35px minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; border-bottom: 1px solid #e1e7df; padding: 13px 0; }
+.employee-manager-row .registration-person { min-width: 0; }
+.employee-manager-row .registration-person strong, .employee-manager-row .registration-person span, .employee-manager-row .registration-person small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.owner-employee-actions { grid-column: 2 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.owner-employee-actions button { padding: 7px 9px; font-size: 9px; }
+.employee-transfer-form { grid-column: 2 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+.employee-transfer-form select { flex: 1; min-width: 140px; border: 1px solid #d9e0d8; background: #fff; color: #263538; padding: 7px 9px; font-size: 10px; }
+.employee-manager-row .registration-error { grid-column: 2 / -1; }
+.employee-assignee-list { display: grid; gap: 6px; max-height: 140px; overflow: auto; border: 1px solid #dfe4dc; background: #fff; padding: 8px; }
+.employee-assignee-list label { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #667371; }
+.employee-assignee-list input { accent-color: #8da82e; }
+.employee-assignee-actions { display: flex; gap: 12px; margin-top: 7px; }
+.schedule-message { color: #62801c; font-size: 10px; min-height: 14px; margin: 4px 0; }
+
+@media (max-width: 720px) {
+  .employee-manager-grid, .employee-filter-row { grid-template-columns: 1fr !important; }
+  .employee-manager-row { grid-template-columns: 31px minmax(0, 1fr); }
+  .owner-employee-actions, .employee-transfer-form, .employee-manager-row .registration-error { grid-column: 2; }
+  .owner-employee-actions button, .employee-transfer-form button, .employee-transfer-form select { min-height: 44px; font-size: 11px; }
+}

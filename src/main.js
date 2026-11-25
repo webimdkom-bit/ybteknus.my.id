@@ -26,6 +26,7 @@ import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
 import { createOrganization, getBusiness, getOrganization, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, listOrganizationsForOwner, listTasksForUser, updateUserProfile } from "./lib/firestore/repositories.js";
 import { formatInAppZone, getDateKey } from "./lib/utils/time.js";
+import { pickActiveSchedule } from "./features/schedules/schedule-calculations.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck, FolderOpen } from "lucide";
 
 const app = document.querySelector("#app");
@@ -85,7 +86,8 @@ function renderOwnerDashboard(profile) {
         <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
         <a class="nav-item" href="#businesses" data-open-businesses><i data-lucide="building-2"></i><span>Bisnis</span><b>02</b></a>
        <a class="nav-item" href="#people" data-open-registrations><i data-lucide="users"></i><span>Registrasi</span><b>03</b></a>
-        ${profile?.role === "owner" ? '<a class="nav-item" href="#owners" data-open-owners><i data-lucide="users"></i><span>Owners</span><b>04</b></a>' : ""}
+        ${profile?.role === "owner" ? '<a class="nav-item" href="#employees" data-open-employees-owner><i data-lucide="users"></i><span>Karyawan</span><b>04</b></a>' : ""}
+        ${profile?.role === "owner" ? '<a class="nav-item" href="#owners" data-open-owners><i data-lucide="users"></i><span>Owners</span><b>05</b></a>' : ""}
         ${profile?.role === "owner" ? '<a class="nav-item" href="#admins" data-open-admins><i data-lucide="user-cog"></i><span>Admins</span><b>05</b></a>' : ""}
        <a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>${profile?.role === "owner" ? "06" : "04"}</b></a>
        <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi GPS</span><b>${profile?.role === "owner" ? "07" : "05"}</b></a>
@@ -198,6 +200,10 @@ function renderOwnerDashboard(profile) {
   document.querySelectorAll("[data-open-registrations]").forEach((button) => button.addEventListener("click", (event) => {
     event.preventDefault();
     if (profile.role === "owner") openRegistrationManager({ profile });
+  }));
+  document.querySelectorAll("[data-open-employees-owner]").forEach((button) => button.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (profile.role === "owner") openEmployeeManager({ profile });
   }));
   document.querySelector("[data-open-owners]")?.addEventListener("click", (event) => {
     event.preventDefault();
@@ -382,7 +388,7 @@ async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
       listAttendance(profile.uid),
     ]);
     businessElement.textContent = business?.name || "Bisnis aktif";
-    const todaySchedule = schedules.find((schedule) => schedule.businessId === businessId && schedule.date === today && schedule.status !== "cancelled");
+    const todaySchedule = pickActiveSchedule(schedules, { businessId, date: today });
     const todayShift = todaySchedule ? await getShift(todaySchedule.shiftId) : null;
     scheduleElement.innerHTML = todayShift
       ? `<strong>${escapeHtml(todayShift.name)}</strong><span>${escapeHtml(todayShift.startTime)} – ${escapeHtml(todayShift.endTime)} · toleransi ${todayShift.toleranceMinutes || 0} menit</span>`

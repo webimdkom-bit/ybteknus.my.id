@@ -13,7 +13,7 @@ const ALLOWED_ACTIONS = new Set([
   "report_submitted", "report_approved", "report_revision_requested",
   "final_report_submitted", "final_report_resubmitted", "final_report_approved", "final_report_revision_requested",
   "file_uploaded", "file_deleted",
-  "account_status_changed", "account_deactivated", "owner_created",
+  "account_status_changed", "account_deactivated", "employee_password_reset", "owner_created",
   "admin_created", "admin_access_changed", "admin_deactivated", "admin_activated",
   "business_created", "business_updated", "business_registration_toggled", "business_location_changed",
   "employee_transferred",
