@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_TIME_ZONE, formatInAppZone, getDateKey, getJakartaISO, getJakartaMinutes, getTimeKey } from "../../src/lib/utils/time.js";
+import { APP_TIME_ZONE, formatInAppZone, getDateKey, getGreeting, getJakartaISO, getJakartaMinutes, getTimeKey } from "../../src/lib/utils/time.js";
 
 describe("Asia/Jakarta time helpers", () => {
   it("uses Asia/Jakarta regardless of host timezone", () => {
@@ -17,5 +17,16 @@ describe("Asia/Jakarta time helpers", () => {
     const formatted = formatInAppZone("2026-11-22T17:30:00Z", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
     expect(formatted).toContain("2026");
     expect(formatted).toMatch(/00[.:]30/);
+  });
+
+  it("selects greeting by Jakarta wall-clock time", () => {
+    expect(getGreeting(new Date("2026-11-21T20:59:00Z"))).toBe("Selamat malam");
+    expect(getGreeting(new Date("2026-11-21T21:00:00Z"))).toBe("Selamat pagi");
+    expect(getGreeting(new Date("2026-11-22T03:59:00Z"))).toBe("Selamat pagi");
+    expect(getGreeting(new Date("2026-11-22T04:00:00Z"))).toBe("Selamat siang");
+    expect(getGreeting(new Date("2026-11-22T07:59:00Z"))).toBe("Selamat siang");
+    expect(getGreeting(new Date("2026-11-22T08:00:00Z"))).toBe("Selamat sore");
+    expect(getGreeting(new Date("2026-11-22T10:59:00Z"))).toBe("Selamat sore");
+    expect(getGreeting(new Date("2026-11-22T11:00:00Z"))).toBe("Selamat malam");
   });
 });

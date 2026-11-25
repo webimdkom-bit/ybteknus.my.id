@@ -75,7 +75,7 @@ async function loadReport(profile, reportDate) {
       businessId: task.businessId || "",
       deadline: task.deadline || "",
       taskStatus: task.status || "assigned",
-      completed: task.status === "approved",
+      completed: ["submitted", "approved"].includes(task.status),
       progress: Number(task.progress || 0),
       reportId: linked?.id || existingEntries.get(task.id)?.reportId || null,
       reportStatus: linked?.status || existingEntries.get(task.id)?.reportStatus || null,

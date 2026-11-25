@@ -783,7 +783,7 @@ export async function syncDailyReportTask({ taskId, task = {}, userId = null, re
     if (index < 0 && !(data.taskIds || []).includes(taskId) && data.reportDate !== getDeadlineDate(task.deadline)) return;
     const patch = {
       taskStatus: task.status || "assigned",
-      completed: task.status === "approved",
+      completed: ["submitted", "approved"].includes(task.status),
       progress: Number(task.progress || 0),
       archived: Boolean(task.archived),
       reportId: reportId || entries[index]?.reportId || null,

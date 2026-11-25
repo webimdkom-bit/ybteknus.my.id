@@ -38,6 +38,14 @@ export function getJakartaMinutes(date = new Date()) {
   return hours * 60 + minutes;
 }
 
+export function getGreeting(date = new Date()) {
+  const minutes = getJakartaMinutes(date);
+  if (minutes >= 240 && minutes < 660) return "Selamat pagi";
+  if (minutes >= 660 && minutes < 900) return "Selamat siang";
+  if (minutes >= 900 && minutes < 1080) return "Selamat sore";
+  return "Selamat malam";
+}
+
 export function formatInAppZone(value, options = {}) {
   if (!value) return "-";
   const date = value instanceof Date ? value : new Date(value);

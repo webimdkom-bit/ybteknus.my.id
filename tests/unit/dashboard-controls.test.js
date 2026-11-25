@@ -30,4 +30,9 @@ describe("dashboard control wiring", () => {
     expect(main).toContain('href="#employee-schedule"');
     expect(main).toContain('id="employee-schedule"');
   });
+
+  it("uses a time-aware greeting for all dashboards", () => {
+    expect(main).not.toContain("Good morning");
+    expect((main.match(/\$\{getGreeting\(\)\},<br>/g) || []).length).toBe(3);
+  });
 });

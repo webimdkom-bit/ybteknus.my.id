@@ -21,6 +21,14 @@ describe("task list wiring", () => {
     expect(view).toContain("restoreTask(");
   });
 
+  it("lets employee and admin assignees complete tasks", () => {
+    expect(view).toContain('data-task-complete="${task.id}"');
+    expect(view).toContain("Selesaikan tugas");
+    expect(view).toContain('action: "task_completed"');
+    expect(view).toContain('status: "submitted", progress: 100');
+    expect(audit).toContain('"task_completed"');
+  });
+
   it("has search, filters, sort, and archive view", () => {
     expect(view).toContain('class="task-list-search"');
     expect(view).toContain('class="task-list-view"');

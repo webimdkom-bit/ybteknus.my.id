@@ -196,7 +196,7 @@ function renderTaskList(overlay, profile, tasks, reports, canManage, reload, sta
       if (!task.archived) return false;
     } else if (task.archived) return false;
     if (state.view === "active" && ["approved", "cancelled"].includes(task.status)) return false;
-    if (state.view === "completed" && task.status !== "approved") return false;
+    if (state.view === "completed" && !["submitted", "approved"].includes(task.status)) return false;
     if (state.view === "cancelled" && task.status !== "cancelled") return false;
     if (state.status && task.status !== state.status) return false;
     if (state.priority && task.priority !== state.priority) return false;
@@ -281,12 +281,13 @@ function taskRow(task, tasks, reports, profile, canManage, businessMap = new Map
   const canArchive = canManage(task.businessId) && !task.archived;
   const canRestore = canManage(task.businessId) && task.archived;
   const canCancel = mayManage && !task.archived && !["approved", "cancelled"].includes(task.status);
+  const canComplete = profile.role !== "owner" && (task.assignedTo || []).includes(profile.uid) && !task.archived && ["assigned", "in-progress", "revision"].includes(task.status);
 
   const childrenMarkup = children.length ? `<div class="task-children"><div class="task-children-head"><strong>Tugas turunan</strong><span>${approvedChildren}/${children.length} disetujui · ${progress}%</span></div><div class="task-child-progress"><i style="width:${progress}%"></i></div>${children.map((child) => `<div class="task-child-row"><span>${escapeHtml(child.title)}</span><b class="task-status ${child.status}">${child.status}</b></div>`).join("")}</div>` : "";
   const subtaskForm = isRoot && mayManage && !task.archived ? `<div class="subtask-form" data-subtask-form="${task.id}" hidden><input type="text" data-subtask-title placeholder="Judul subtugas" /><textarea data-subtask-description rows="2" placeholder="Deskripsi subtugas"></textarea><div class="task-form-grid"><input type="datetime-local" data-subtask-deadline value="${toDateTimeLocalValue(task.deadline)}" /><select data-subtask-assignee><option value="">Pilih employee</option></select></div><button class="primary-button" type="button" data-subtask-submit="${task.id}">Buat subtugas</button></div>` : "";
   const actions = profile.role === "employee"
-    ? `<button class="secondary-button task-start" data-task-action="start" data-task-id="${task.id}">${task.status === "assigned" ? "Mulai tugas" : task.status === "in-progress" ? "Sedang dikerjakan" : task.status}</button><button class="primary-button task-report" data-task-action="report" data-task-id="${task.id}">${report ? "Lihat laporan" : "Kirim laporan"}</button><input type="file" class="task-evidence-file" data-task-evidence="${task.id}" accept="image/*,.pdf,.doc,.docx" hidden />`
-    : `<span class="task-assignee">${task.assignedTo?.length || 0} penerima · ${escapeHtml(businessMap.get(task.businessId) || "Bisnis")}</span>${isRoot && mayManage && !task.archived ? `<button class="secondary-button" data-subtask-toggle="${task.id}">Buat subtugas</button>` : ""}${canCreateFinal && !task.archived ? `<button class="primary-button" data-final-report="${task.id}">Laporan akhir</button>` : ""}${canCancel ? `<button class="reject-registration" data-task-cancel="${task.id}">Batalkan</button>` : ""}${canArchive ? `<button class="secondary-button" data-task-archive="${task.id}">Arsipkan</button>` : ""}${canRestore ? `<button class="secondary-button" data-task-restore="${task.id}">Pulihkan</button>` : ""}`;
+    ? `<button class="secondary-button task-start" data-task-action="start" data-task-id="${task.id}">${task.status === "assigned" ? "Mulai tugas" : task.status === "in-progress" ? "Sedang dikerjakan" : task.status}</button>${canComplete ? `<button class="primary-button task-complete" data-task-complete="${task.id}">Selesaikan tugas</button>` : ""}<button class="primary-button task-report" data-task-action="report" data-task-id="${task.id}">${report ? "Lihat laporan" : "Kirim laporan"}</button><input type="file" class="task-evidence-file" data-task-evidence="${task.id}" accept="image/*,.pdf,.doc,.docx" hidden />`
+    : `<span class="task-assignee">${task.assignedTo?.length || 0} penerima · ${escapeHtml(businessMap.get(task.businessId) || "Bisnis")}</span>${canComplete ? `<button class="primary-button task-complete" data-task-complete="${task.id}">Selesaikan tugas</button>` : ""}${isRoot && mayManage && !task.archived ? `<button class="secondary-button" data-subtask-toggle="${task.id}">Buat subtugas</button>` : ""}${canCreateFinal && !task.archived ? `<button class="primary-button" data-final-report="${task.id}">Laporan akhir</button>` : ""}${canCancel ? `<button class="reject-registration" data-task-cancel="${task.id}">Batalkan</button>` : ""}${canArchive ? `<button class="secondary-button" data-task-archive="${task.id}">Arsipkan</button>` : ""}${canRestore ? `<button class="secondary-button" data-task-restore="${task.id}">Pulihkan</button>` : ""}`;
 
   const finalMarkup = finalReport ? `<div class="task-final-report"><div><strong>Laporan akhir${finalReport.userId === profile.uid ? " Anda" : ""}</strong><span>${escapeHtml(finalReport.description || "-")}</span></div><b class="task-status ${finalReport.status}">${finalReport.status}</b>${profile.role === "owner" && finalReport.status === "submitted" ? `<button class="approve-registration" data-final-action="approved" data-final-report-id="${finalReport.id}" data-final-task-id="${task.id}">Setujui akhir</button><button class="reject-registration" data-final-action="revision" data-final-report-id="${finalReport.id}" data-final-task-id="${task.id}">Revisi akhir</button>` : ""}${finalReport.userId === profile.uid && finalReport.status === "revision" ? `<button class="secondary-button" data-final-resubmit="${finalReport.id}" data-final-task-id="${task.id}">Kirim ulang</button>` : ""}</div>` : "";
 
@@ -327,6 +328,17 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
     await updateTaskAndDailyReports(task.id, changes);
     if (task.parentTaskId) await syncParentProgress(task.parentTaskId, tasks, profile);
     await reload();
+  }));
+  overlay.querySelectorAll("[data-task-complete]").forEach((button) => button.addEventListener("click", async () => {
+    if (!window.confirm("Tandai tugas ini selesai?")) return;
+    button.disabled = true;
+    try {
+      await updateTaskAndDailyReports(button.dataset.taskComplete, { status: "submitted", progress: 100 });
+      await syncTimeStatus(button.dataset.taskComplete, tasks, "submitted");
+      logAuditSafe({ profile, action: "task_completed", targetType: "task", targetId: button.dataset.taskComplete });
+      notifySafe({ type: NOTIFICATION_TYPES.reportSubmitted, title: "Tugas selesai", body: "Menunggu review tugas.", organizationId: profile.organizationId, targetType: "task", targetId: button.dataset.taskComplete, audience: "owner" });
+      await reload();
+    } catch (error) { window.alert(error.message); button.disabled = false; }
   }));
   overlay.querySelectorAll("[data-task-action=\"report\"]").forEach((button) => button.addEventListener("click", async () => {
     const task = tasks.find((item) => item.id === button.dataset.taskId);
