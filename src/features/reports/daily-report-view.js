@@ -63,7 +63,7 @@ async function loadReport(profile, reportDate) {
   const [tasks, taskReports, files] = await Promise.all([
     listTasksForUser(profile.uid, 500),
     listTaskReportsForUser(profile.uid),
-    listFilesForTarget(profile.organizationId, "dailyReport", `${profile.uid}_${reportDate}`),
+    listFilesForTarget(profile.organizationId, "dailyReport", `${profile.uid}_${reportDate}`, profile.uid),
   ]);
   const reportsByTask = new Map(taskReports.filter((item) => toDateKey(item.createdAt) === reportDate).map((item) => [item.taskId, item]));
   const existingEntries = new Map((stored?.tasks || []).map((item) => [item.taskId, item]));
@@ -93,11 +93,10 @@ async function loadReport(profile, reportDate) {
     status: stored?.status || DAILY_REPORT_STATUS.DRAFT,
     notes: stored?.notes || "",
     tasks: entries,
-    taskIds: entries.map((item) => item.taskId),
     attachments,
   };
   if (isDailyReportEditable(next.status)) {
-    await saveDailyReport({ profile, reportDate, report: { notes: next.notes, tasks: next.tasks, taskIds: next.taskIds, attachments: next.attachments, status: next.status } });
+    await saveDailyReport({ profile, reportDate, report: { notes: next.notes, tasks: next.tasks, attachments: next.attachments, status: next.status } });
   }
   return { ...next, id: `${profile.uid}_${reportDate}` };
 }
@@ -109,7 +108,7 @@ function bindPersonalEvents(body, profile, reportDate, report, apply) {
   }));
   body.querySelector("[data-daily-save]")?.addEventListener("click", () => apply(async () => {
     const notes = body.querySelector("#daily-report-notes").value;
-    await saveDailyReport({ profile, reportDate, report: { notes, tasks: report.tasks, taskIds: report.taskIds, attachments: report.attachments, status: report.status } });
+    await saveDailyReport({ profile, reportDate, report: { notes, tasks: report.tasks, attachments: report.attachments, status: report.status } });
     return { report: { ...report, notes }, message: "Draf disimpan." };
   }));
   body.querySelector("[data-daily-submit]")?.addEventListener("click", () => apply(async () => {
@@ -118,7 +117,7 @@ function bindPersonalEvents(body, profile, reportDate, report, apply) {
     if (!notes && !(report.tasks || []).length) return { error: "Tulis catatan atau pastikan ada tugas hari ini." };
     const submittedAt = getJakartaISO();
     const status = DAILY_REPORT_STATUS.SUBMITTED;
-    await saveDailyReport({ profile, reportDate, report: { notes, tasks: report.tasks, taskIds: report.taskIds, attachments: report.attachments, status, submittedAt } });
+    await saveDailyReport({ profile, reportDate, report: { notes, tasks: report.tasks, attachments: report.attachments, status, submittedAt } });
     logAuditSafe({ profile, action: "daily_report_submitted", targetType: "dailyReport", targetId: `${profile.uid}_${reportDate}`, metadata: { reportDate, status } });
     notifySafe({ id: `daily_report_submitted_${profile.uid}_${reportDate}`, type: NOTIFICATION_TYPES.dailyReportSubmitted, title: "Laporan harian dikirim", body: `${profile.displayName || profile.email || "Karyawan"} · ${reportDate}`, organizationId: profile.organizationId, targetType: "dailyReport", targetId: `${profile.uid}_${reportDate}`, audience: "owner" });
     return { report: { ...report, notes, status, submittedAt }, message: "Laporan berhasil dikirim." };
@@ -147,7 +146,7 @@ function bindPersonalEvents(body, profile, reportDate, report, apply) {
         report.attachments = [...(report.attachments || []), { fileId: metadata.id, fileName: file.name, resourceType, access: resourceType === "image" ? "public" : "private", secureUrl: uploaded.secure_url }];
       } catch (fileError) { uploadError = fileError.message; }
     }
-    await saveDailyReport({ profile, reportDate, report: { notes: report.notes, tasks: report.tasks, taskIds: report.taskIds, attachments: report.attachments, status: report.status, submittedAt: report.submittedAt } });
+    await saveDailyReport({ profile, reportDate, report: { notes: report.notes, tasks: report.tasks, attachments: report.attachments, status: report.status, submittedAt: report.submittedAt } });
     event.target.value = "";
     await apply(async () => ({ report, error: uploadError, message: "Lampiran diperbarui." }));
   });

@@ -166,7 +166,8 @@
       "fields": [
         { "fieldPath": "organizationId", "order": "ASCENDING" },
         { "fieldPath": "targetType", "order": "ASCENDING" },
-        { "fieldPath": "targetId", "order": "ASCENDING" }
+        { "fieldPath": "targetId", "order": "ASCENDING" },
+        { "fieldPath": "uploadedBy", "order": "ASCENDING" }
       ]
     },
     {

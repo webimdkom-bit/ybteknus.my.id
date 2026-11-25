@@ -18,8 +18,10 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebase/firebase.js";
+import { getDateKey } from "../utils/time.js";
 import { BUSINESS_STATUS, normalizeBusinessChanges, normalizeBusinessFields } from "../utils/business.js";
 import { dailyReportKey } from "../utils/daily-report.js";
+import { getDeadlineDate } from "../../features/tasks/task-status.js";
 
 const MAX_LIST = 200;
 
@@ -709,8 +711,11 @@ export async function getDailyReport(userId, reportDate) {
 
 export async function saveDailyReport({ profile, reportDate, report }) {
   const reference = doc(db, COLLECTIONS.DAILY_REPORTS, dailyReportKey(profile.uid, reportDate));
-  await setDoc(reference, {
-    ...report,
+  const existing = await getDoc(reference);
+  const editable = { ...(report || {}) };
+  delete editable.id;
+  delete editable.taskIds;
+  const identity = existing.exists() ? {} : {
     userId: profile.uid,
     organizationId: profile.organizationId,
     businessIds: profile.businessIds || [],
@@ -718,9 +723,9 @@ export async function saveDailyReport({ profile, reportDate, report }) {
     displayName: profile.displayName || "",
     email: profile.email || "",
     reportDate,
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
-  return { id: reference.id, ...report, userId: profile.uid, organizationId: profile.organizationId, reportDate };
+  };
+  await setDoc(reference, { ...editable, ...identity, updatedAt: serverTimestamp() }, { merge: true });
+  return { id: reference.id, ...editable, ...identity, userId: profile.uid, organizationId: profile.organizationId, reportDate };
 }
 
 export async function reviewDailyReport(reportId, changes) {
@@ -747,28 +752,36 @@ export async function listDailyReportsForOrganization(organizationId, reportDate
 }
 
 export async function syncDailyReportTask({ taskId, task = {}, userId = null, reportId = null, reportStatus = null }) {
-  const snapshot = await getDocs(query(collection(db, COLLECTIONS.DAILY_REPORTS), where("taskIds", "array-contains", taskId)));
-  if (!snapshot.docs.length) return;
+  const users = [...new Set([...(task.assignedTo || []), userId].filter(Boolean))];
+  if (!users.length) return;
+  const dates = new Set([getDateKey()]);
+  if (task.deadline) dates.add(getDeadlineDate(task.deadline));
+  const references = [];
+  users.forEach((uid) => dates.forEach((date) => references.push(doc(db, COLLECTIONS.DAILY_REPORTS, dailyReportKey(uid, date)))));
+  const snapshots = await Promise.all(references.map((reference) => getDoc(reference)));
   const batch = writeBatch(db);
-  snapshot.docs.forEach((docSnapshot) => {
-    const data = docSnapshot.data();
-    if (userId && data.userId !== userId) return;
-    const entries = (data.tasks || []).map((entry) => {
-      if (entry.taskId !== taskId) return entry;
-      return {
-        ...entry,
-        taskStatus: task.status || entry.taskStatus,
-        completed: task.status === "approved",
-        progress: Number(task.progress || 0),
-        archived: Boolean(task.archived),
-        reportId: reportId || entry.reportId || null,
-        reportStatus: reportStatus || entry.reportStatus || null,
-        updatedAt: serverTimestamp(),
-      };
-    });
-    batch.update(docSnapshot.ref, { tasks: entries, updatedAt: serverTimestamp() });
+  let changed = false;
+  snapshots.forEach((snapshot) => {
+    if (!snapshot.exists()) return;
+    const data = snapshot.data();
+    const entries = Array.isArray(data.tasks) ? [...data.tasks] : [];
+    const index = entries.findIndex((entry) => entry.taskId === taskId);
+    if (index < 0 && !(data.taskIds || []).includes(taskId) && data.reportDate !== getDeadlineDate(task.deadline)) return;
+    const patch = {
+      taskStatus: task.status || "assigned",
+      completed: task.status === "approved",
+      progress: Number(task.progress || 0),
+      archived: Boolean(task.archived),
+      reportId: reportId || entries[index]?.reportId || null,
+      reportStatus: reportStatus || entries[index]?.reportStatus || null,
+      updatedAt: serverTimestamp(),
+    };
+    if (index >= 0) entries[index] = { ...entries[index], ...patch };
+    else entries.push({ taskId, title: task.title || "-", businessId: task.businessId || "", deadline: task.deadline || "", ...patch });
+    batch.update(snapshot.ref, { tasks: entries, updatedAt: serverTimestamp() });
+    changed = true;
   });
-  await batch.commit();
+  if (changed) await batch.commit();
 }
 
 export async function updateTaskAndDailyReports(taskId, changes, options = {}) {
@@ -779,13 +792,14 @@ export async function updateTaskAndDailyReports(taskId, changes, options = {}) {
   }
 }
 
-export async function listFilesForTarget(organizationId, targetType, targetId) {
-  const result = await getDocs(query(
-    collection(db, COLLECTIONS.FILES),
+export async function listFilesForTarget(organizationId, targetType, targetId, uploadedBy = "") {
+  const constraints = [
     where("organizationId", "==", organizationId),
     where("targetType", "==", targetType),
     where("targetId", "==", targetId),
-  ));
+  ];
+  if (uploadedBy) constraints.push(where("uploadedBy", "==", uploadedBy));
+  const result = await getDocs(query(collection(db, COLLECTIONS.FILES), ...constraints));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
