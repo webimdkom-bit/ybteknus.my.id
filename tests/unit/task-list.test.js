@@ -41,12 +41,13 @@ describe("task list wiring", () => {
     expect(view).toContain("toDateTimeLocalValue(task.deadline)");
   });
 
-  it("has a redesigned assignee picker with search and chips", () => {
-    expect(view).toContain('class="task-assignee-search"');
-    expect(view).toContain("data-assignee-selected");
-    expect(view).toContain("task-assignee-chip");
-    expect(view).toContain("data-assignee-all");
-    expect(view).toContain("data-assignee-none");
+  it("uses simple employee checkboxes filtered by selected business", () => {
+    expect(view).toContain('id="task-assignees"');
+    expect(view).toContain("listEmployeesForBusiness(profile.organizationId, businessId)");
+    expect(view).toContain('data-task-assignee="${employee.id}"');
+    expect(view).not.toContain("listAdmins");
+    expect(view).not.toContain("task-assignee-search");
+    expect(view).not.toContain("task-assignee-chip");
   });
 
   it("has paging indexes for tasks", () => {

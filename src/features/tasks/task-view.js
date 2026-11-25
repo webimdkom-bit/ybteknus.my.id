@@ -2,7 +2,6 @@ import {
   createTask,
   createTaskReport,
   getBusiness,
-  listAdmins,
   listBusinessesForOrganization,
   listEmployeesForBusiness,
   listMembershipsForUser,
@@ -94,16 +93,13 @@ export async function openTaskManager({ profile, context = null }) {
 }
 
 function taskFormMarkup() {
-  return `<form class="task-form"><h3>Buat tugas</h3><div class="field"><label for="task-business">Bisnis</label><select id="task-business" name="businessId" required><option value="">Memuat bisnis...</option></select></div><div class="field"><label>Penerima <span>(bisa lebih dari satu)</span></label><div class="task-assignee-picker"><input class="task-assignee-search" type="search" placeholder="Cari nama atau email..." aria-label="Cari penerima" /><div class="task-assignee-selected" data-assignee-selected><span>Belum ada penerima dipilih.</span></div><div class="task-assignee-summary"><span data-assignee-count>0 dipilih</span><button class="text-button" type="button" data-assignee-all>Pilih semua</button><button class="text-button" type="button" data-assignee-none>Kosongkan</button></div><div class="task-assignee-list" id="task-assignees"><p class="task-empty">Memuat penerima...</p></div></div></div><div class="field"><label for="task-category">Kategori</label><div class="task-category-row"><select id="task-category" name="category">${DEFAULT_TASK_CATEGORIES.map((category) => `<option>${category}</option>`).join("")}</select><button class="secondary-button" type="button" data-add-category hidden>Kategori baru</button></div></div><div class="field"><label for="task-name">Judul tugas</label><input id="task-name" name="title" placeholder="Contoh: Inventory check" required /></div><div class="field"><label for="task-description">Deskripsi</label><textarea id="task-description" name="description" rows="3" required></textarea></div><div class="field"><label for="task-instructions">Instruksi kerja <span>(opsional)</span></label><textarea id="task-instructions" name="instructions" rows="2" placeholder="Langkah-langkah penting"></textarea></div><div class="task-form-grid"><div class="field"><label for="task-report-format">Format laporan</label><select id="task-report-format" name="reportFormat"><option value="written">Laporan tertulis</option><option value="checklist">Checklist</option><option value="photo">Bukti foto</option><option value="document">Bukti dokumen</option><option value="mixed">Kombinasi</option></select></div><div class="field"><label for="task-evidence-required">Persyaratan bukti</label><select id="task-evidence-required" name="evidenceRequired"><option value="none">Tidak wajib</option><option value="photo">Foto wajib</option><option value="document">Dokumen wajib</option><option value="either">Foto atau dokumen</option></select></div></div><div class="field"><label for="task-attachment">Lampiran URL <span>(opsional)</span></label><input id="task-attachment" name="attachmentUrl" type="url" placeholder="https://..." /></div><div class="task-form-grid"><div class="field"><label for="task-deadline">Deadline</label><input id="task-deadline" name="deadline" type="datetime-local" value="${getDateKey()}T17:00" required /></div><div class="field"><label for="task-priority">Prioritas</label><select id="task-priority" name="priority"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select></div></div><div class="field"><label for="task-checklist">Checklist <span>(satu item per baris)</span></label><textarea id="task-checklist" name="checklist" rows="3" placeholder="Periksa stok\nFoto rak"></textarea></div><p class="task-message" role="status"></p><p class="task-error" role="alert"></p><button class="primary-button" type="submit">Buat tugas <span>→</span></button></form>`;
+  return `<form class="task-form"><h3>Buat tugas</h3><div class="field"><label for="task-business">Bisnis</label><select id="task-business" name="businessId" required><option value="">Memuat bisnis...</option></select></div><div class="field"><label>Penerima <span>(karyawan sesuai bisnis)</span></label><div class="task-assignee-list" id="task-assignees"><p class="task-empty">Memuat karyawan...</p></div></div><div class="field"><label for="task-category">Kategori</label><div class="task-category-row"><select id="task-category" name="category">${DEFAULT_TASK_CATEGORIES.map((category) => `<option>${category}</option>`).join("")}</select><button class="secondary-button" type="button" data-add-category hidden>Kategori baru</button></div></div><div class="field"><label for="task-name">Judul tugas</label><input id="task-name" name="title" placeholder="Contoh: Inventory check" required /></div><div class="field"><label for="task-description">Deskripsi</label><textarea id="task-description" name="description" rows="3" required></textarea></div><div class="field"><label for="task-instructions">Instruksi kerja <span>(opsional)</span></label><textarea id="task-instructions" name="instructions" rows="2" placeholder="Langkah-langkah penting"></textarea></div><div class="task-form-grid"><div class="field"><label for="task-report-format">Format laporan</label><select id="task-report-format" name="reportFormat"><option value="written">Laporan tertulis</option><option value="checklist">Checklist</option><option value="photo">Bukti foto</option><option value="document">Bukti dokumen</option><option value="mixed">Kombinasi</option></select></div><div class="field"><label for="task-evidence-required">Persyaratan bukti</label><select id="task-evidence-required" name="evidenceRequired"><option value="none">Tidak wajib</option><option value="photo">Foto wajib</option><option value="document">Dokumen wajib</option><option value="either">Foto atau dokumen</option></select></div></div><div class="field"><label for="task-attachment">Lampiran URL <span>(opsional)</span></label><input id="task-attachment" name="attachmentUrl" type="url" placeholder="https://..." /></div><div class="task-form-grid"><div class="field"><label for="task-deadline">Deadline</label><input id="task-deadline" name="deadline" type="datetime-local" value="${getDateKey()}T17:00" required /></div><div class="field"><label for="task-priority">Prioritas</label><select id="task-priority" name="priority"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select></div></div><div class="field"><label for="task-checklist">Checklist <span>(satu item per baris)</span></label><textarea id="task-checklist" name="checklist" rows="3" placeholder="Periksa stok\nFoto rak"></textarea></div><p class="task-message" role="status"></p><p class="task-error" role="alert"></p><button class="primary-button" type="submit">Buat tugas <span>→</span></button></form>`;
 }
 
 async function setupTaskForm(overlay, profile, canManage, reload) {
   const form = overlay.querySelector(".task-form");
   const businessSelect = form.querySelector("#task-business");
   const assigneeList = form.querySelector("#task-assignees");
-  const assigneeSearch = form.querySelector(".task-assignee-search");
-  const selectedBox = form.querySelector("[data-assignee-selected]");
-  const selectedCount = form.querySelector("[data-assignee-count]");
   const categorySelect = form.querySelector("#task-category");
   const addCategoryButton = form.querySelector("[data-add-category]");
   if (profile.role === "owner") addCategoryButton.hidden = false;
@@ -114,65 +110,18 @@ async function setupTaskForm(overlay, profile, canManage, reload) {
   businessSelect.innerHTML = visibleBusinesses.map((business) => `<option value="${business.id}">${business.name}</option>`).join("");
 
   let validAssigneeIds = new Set();
-  let activePeople = [];
-  const selectedIds = new Set();
-
-  const renderSelected = () => {
-    const selected = activePeople.filter((person) => selectedIds.has(person.id));
-    selectedCount.textContent = `${selected.length} dipilih`;
-    selectedBox.innerHTML = selected.length
-      ? selected.map((person) => `<button class="task-assignee-chip" type="button" data-remove-assignee="${person.id}">${escapeHtml(person.displayName || person.email)} ×</button>`).join("")
-      : `<span>Belum ada penerima dipilih.</span>`;
-  };
-
-  const renderAssignees = () => {
-    const term = assigneeSearch.value.trim().toLowerCase();
-    const matches = activePeople.filter((person) => !term || `${person.displayName || ""} ${person.email || ""}`.toLowerCase().includes(term));
-    const groups = [
-      { label: "Admin", people: matches.filter((person) => person.role === "admin") },
-      { label: "Employee", people: matches.filter((person) => person.role !== "admin") },
-    ];
-    assigneeList.innerHTML = groups.filter((group) => group.people.length).map((group) => `<div class="task-assignee-group"><h4>${group.label}</h4>${group.people.map((person) => `<label class="task-assignee-option"><input type="checkbox" value="${person.id}" data-task-assignee="${person.id}" ${selectedIds.has(person.id) ? "checked" : ""} /><span class="task-assignee-avatar">${escapeHtml((person.displayName || person.email || "P").slice(0, 1)).toUpperCase()}</span><span class="task-assignee-copy"><strong>${escapeHtml(person.displayName || "Tanpa nama")}</strong><small>${escapeHtml(person.email || "")}</small></span><b class="task-assignee-role">${group.label}</b></label>`).join("")}</div>`).join("") || `<p class="task-empty">Belum ada penerima.</p>`;
-    renderSelected();
-  };
-
   const loadAssignees = async () => {
     const businessId = businessSelect.value;
-    if (!businessId) return;
-    const [employees, admins] = await Promise.all([
-      listEmployeesForBusiness(profile.organizationId, businessId),
-      profile.role === "owner" ? listAdmins(profile.organizationId) : Promise.resolve([]),
-    ]);
-    activePeople = [...admins.filter((admin) => admin.businessIds?.includes(businessId) && admin.status === "active"), ...employees.filter((employee) => employee.status === "active")];
-    validAssigneeIds = new Set(activePeople.map((person) => person.id));
-    [...selectedIds].forEach((id) => { if (!validAssigneeIds.has(id)) selectedIds.delete(id); });
-    renderAssignees();
+    if (!businessId) {
+      assigneeList.innerHTML = `<p class="task-empty">Pilih bisnis terlebih dahulu.</p>`;
+      return;
+    }
+    const employees = await listEmployeesForBusiness(profile.organizationId, businessId);
+    validAssigneeIds = new Set(employees.map((employee) => employee.id));
+    assigneeList.innerHTML = employees.length
+      ? employees.map((employee) => `<label class="task-assignee-option"><input type="checkbox" value="${employee.id}" data-task-assignee="${employee.id}" /><span>${escapeHtml(employee.displayName || employee.email || "Tanpa nama")}</span></label>`).join("")
+      : `<p class="task-empty">Belum ada karyawan pada bisnis ini.</p>`;
   };
-
-  assigneeList.addEventListener("change", (event) => {
-    const input = event.target.closest("[data-task-assignee]");
-    if (!input) return;
-    if (input.checked) selectedIds.add(input.value);
-    else selectedIds.delete(input.value);
-    renderSelected();
-  });
-  selectedBox.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-remove-assignee]");
-    if (!button) return;
-    selectedIds.delete(button.dataset.removeAssignee);
-    const input = assigneeList.querySelector(`[data-task-assignee="${button.dataset.removeAssignee}"]`);
-    if (input) input.checked = false;
-    renderSelected();
-  });
-  assigneeSearch.addEventListener("input", renderAssignees);
-  form.querySelector("[data-assignee-all]").addEventListener("click", () => {
-    activePeople.forEach((person) => selectedIds.add(person.id));
-    renderAssignees();
-  });
-  form.querySelector("[data-assignee-none]").addEventListener("click", () => {
-    selectedIds.clear();
-    renderAssignees();
-  });
   const loadCategories = async () => {
     try {
       const categories = await listTaskCategories(profile.organizationId);
@@ -208,8 +157,6 @@ async function setupTaskForm(overlay, profile, canManage, reload) {
     try {
       await createTaskForAssignees({ profile, businessId: data.businessId, assigneeIds: assignedTo, fields: data });
       form.reset();
-      selectedIds.clear();
-      assigneeSearch.value = "";
       form.querySelector("#task-deadline").value = `${getDateKey()}T17:00`;
       await loadAssignees();
       message.textContent = "Tugas berhasil dibuat.";
