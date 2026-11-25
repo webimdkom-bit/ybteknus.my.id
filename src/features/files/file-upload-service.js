@@ -30,7 +30,7 @@ export async function requestProfileUploadSignature(fileName) {
 }
 
 export async function requestDailyReportUploadSignature({ reportId, fileName, resourceType }) {
-  return post("/api/daily-report-upload", { reportId, fileName, resourceType });
+  return post("/api/file-upload", { reportId, fileName, resourceType });
 }
 
 export function recordFileMetadata(payload) {

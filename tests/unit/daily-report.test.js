@@ -14,6 +14,8 @@ const correctionApi = read("../../api/attendance-correction.js");
 const audit = read("../../api/audit-log.js");
 const notifications = read("../../src/features/notifications/notification-service.js");
 const dailyView = read("../../src/features/reports/daily-report-view.js");
+const fileUploadApi = read("../../api/file-upload.js");
+const uploadService = read("../../src/features/files/file-upload-service.js");
 
 describe("daily report helpers", () => {
   it("builds deterministic report keys", () => {
@@ -68,5 +70,11 @@ describe("daily report wiring", () => {
     expect(dailyView).toContain("Laporan harian saya");
     expect(dailyView).toContain("data-daily-submit");
     expect(dailyView).toContain("data-daily-review");
+  });
+
+  it("reuses file-upload endpoint for daily report attachments", () => {
+    expect(fileUploadApi).toContain('body.reportId');
+    expect(fileUploadApi).toContain('db.collection("dailyReports")');
+    expect(uploadService).toContain('post("/api/file-upload", { reportId, fileName, resourceType })');
   });
 });
