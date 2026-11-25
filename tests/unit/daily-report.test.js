@@ -51,6 +51,13 @@ describe("daily report wiring", () => {
     expect(repository).toContain("export async function updateTaskAndDailyReports(");
   });
 
+  it("avoids denied getDoc on missing daily reports", () => {
+    expect(repository).not.toContain('getDoc(doc(db, COLLECTIONS.DAILY_REPORTS');
+    expect(repository).toContain('where("userId", "==", userId)');
+    expect(repository).toContain('where("reportDate", "==", reportDate)');
+    expect(repository).not.toContain('where("taskIds", "array-contains", taskId)');
+  });
+
   it("gates check-out in UI and APIs", () => {
     expect(attendance).toContain("isDailyReportReady(dailyReport?.status)");
     expect(attendance).toContain("data-attendance-daily-report");

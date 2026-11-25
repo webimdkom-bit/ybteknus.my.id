@@ -705,17 +705,23 @@ export async function createTaskReport(report) {
 }
 
 export async function getDailyReport(userId, reportDate) {
-  const snapshot = await getDoc(doc(db, COLLECTIONS.DAILY_REPORTS, dailyReportKey(userId, reportDate)));
-  return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+  const result = await getDocs(query(
+    collection(db, COLLECTIONS.DAILY_REPORTS),
+    where("userId", "==", userId),
+    where("reportDate", "==", reportDate),
+    limit(1),
+  ));
+  const snapshot = result.docs[0];
+  return snapshot ? { id: snapshot.id, ...snapshot.data() } : null;
 }
 
 export async function saveDailyReport({ profile, reportDate, report }) {
   const reference = doc(db, COLLECTIONS.DAILY_REPORTS, dailyReportKey(profile.uid, reportDate));
-  const existing = await getDoc(reference);
+  const existing = await getDailyReport(profile.uid, reportDate);
   const editable = { ...(report || {}) };
   delete editable.id;
   delete editable.taskIds;
-  const identity = existing.exists() ? {} : {
+  const identity = existing ? {} : {
     userId: profile.uid,
     organizationId: profile.organizationId,
     businessIds: profile.businessIds || [],
@@ -756,13 +762,21 @@ export async function syncDailyReportTask({ taskId, task = {}, userId = null, re
   if (!users.length) return;
   const dates = new Set([getDateKey()]);
   if (task.deadline) dates.add(getDeadlineDate(task.deadline));
-  const references = [];
-  users.forEach((uid) => dates.forEach((date) => references.push(doc(db, COLLECTIONS.DAILY_REPORTS, dailyReportKey(uid, date)))));
-  const snapshots = await Promise.all(references.map((reference) => getDoc(reference)));
+  const snapshots = new Map();
+  for (const uid of users) {
+    for (const date of dates) {
+      const result = await getDocs(query(
+        collection(db, COLLECTIONS.DAILY_REPORTS),
+        where("userId", "==", uid),
+        where("reportDate", "==", date),
+        limit(1),
+      ));
+      result.docs.forEach((snapshot) => snapshots.set(snapshot.id, snapshot));
+    }
+  }
   const batch = writeBatch(db);
   let changed = false;
   snapshots.forEach((snapshot) => {
-    if (!snapshot.exists()) return;
     const data = snapshot.data();
     const entries = Array.isArray(data.tasks) ? [...data.tasks] : [];
     const index = entries.findIndex((entry) => entry.taskId === taskId);
