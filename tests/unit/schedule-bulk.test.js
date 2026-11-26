@@ -34,8 +34,8 @@ describe("bulk schedule assignment wiring", () => {
     expect(service).toContain("createSchedulesBatch(");
   });
 
-  it("uses deterministic ids in a transaction", () => {
-    expect(repositories).toContain("runTransaction");
+  it("uses deterministic ids in a batch", () => {
+    expect(repositories).toContain("writeBatch(db)");
     expect(repositories).toContain("function scheduleKey(");
   });
 

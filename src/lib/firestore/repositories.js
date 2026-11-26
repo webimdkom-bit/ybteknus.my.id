@@ -11,7 +11,6 @@ import {
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -365,27 +364,34 @@ function scheduleKey(organizationId, businessId, userId, date) {
 
 export async function createSchedulesBatch(items) {
   if (!items.length) return { created: [], skipped: [] };
-  return runTransaction(db, async (transaction) => {
-    const created = [];
-    const skipped = [];
-    for (const item of items) {
-      const reference = doc(db, COLLECTIONS.SCHEDULES, scheduleKey(item.organizationId, item.businessId, item.userId, item.date));
-      const existing = await transaction.get(reference);
-      if (existing.exists()) {
-        skipped.push(item.userId);
-        continue;
-      }
-      const record = {
-        ...item,
-        status: "active",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      transaction.set(reference, record);
-      created.push({ id: reference.id, ...record });
+  const organizationId = items[0].organizationId;
+  const businessId = items[0].businessId;
+  const existing = await getDocs(query(
+    collection(db, COLLECTIONS.SCHEDULES),
+    where("organizationId", "==", organizationId),
+    where("businessId", "==", businessId),
+  ));
+  const existingIds = new Set(existing.docs.map((item) => item.id));
+  const batch = writeBatch(db);
+  const created = [];
+  const skipped = [];
+  items.forEach((item) => {
+    const reference = doc(db, COLLECTIONS.SCHEDULES, scheduleKey(item.organizationId, item.businessId, item.userId, item.date));
+    if (existingIds.has(reference.id)) {
+      skipped.push(item.userId);
+      return;
     }
-    return { created, skipped };
+    const record = {
+      ...item,
+      status: "active",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    batch.set(reference, record);
+    created.push({ id: reference.id, ...record });
   });
+  if (created.length) await batch.commit();
+  return { created, skipped };
 }
 
 export async function listSchedules({ organizationId, businessId, userId, from, to }) {
