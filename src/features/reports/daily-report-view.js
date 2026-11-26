@@ -134,7 +134,7 @@ function bindPersonalEvents(body, profile, reportDate, report, apply) {
           fileName: file.name,
           resourceType,
           format: file.name.split(".").pop() || "",
-          cloudinaryPublicId: signature.public_id,
+          publicId: signature.public_id,
           secureUrl: uploaded.secure_url,
           organizationId: profile.organizationId,
           businessId: profile.businessIds?.[0] || null,

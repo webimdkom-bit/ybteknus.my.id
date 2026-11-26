@@ -234,11 +234,13 @@ async function loadTaskList(overlay, profile, canManage, max = 200, context = nu
         : profile.role === "owner"
           ? await listTasksForOrganization(profile.organizationId, max)
           : (await Promise.all((profile.businessIds || []).map((businessId) => listTasksForBusiness(profile.organizationId, businessId, max)))).flat();
-    let reports = profile.role === "owner"
-      ? await listTaskReportsForOrganization(profile.organizationId)
-      : profile.role === "admin"
-        ? (await Promise.all((profile.businessIds || []).map((businessId) => listTaskReportsForBusiness(profile.organizationId, businessId)))).flat()
-        : await Promise.resolve([]);
+    let reports = context
+      ? await listTaskReportsForUser(context.assigneeId)
+      : profile.role === "owner"
+        ? await listTaskReportsForOrganization(profile.organizationId)
+        : profile.role === "admin"
+          ? (await Promise.all((profile.businessIds || []).map((businessId) => listTaskReportsForBusiness(profile.organizationId, businessId)))).flat()
+          : await listTaskReportsForUser(profile.uid);
     if (context) {
       const ids = new Set(tasks.map((task) => task.id));
       reports = reports.filter((report) => ids.has(report.taskId));
@@ -360,7 +362,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
           fileName: file.name,
           resourceType,
           format: file.name.split(".").pop() || "",
-          cloudinaryPublicId: signature.public_id,
+          publicId: signature.public_id,
           secureUrl: uploaded.secure_url,
           organizationId: task.organizationId,
           businessId: task.businessId,
@@ -376,7 +378,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
       const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: uploaded.secure_url, fileMetadataId, checklist: task.checklist || [] });
       await syncDailyReportTask({ taskId: task.id, userId: profile.uid, reportId: report.id, reportStatus: "submitted" });
       logAuditSafe({ profile, action: "report_submitted", targetType: "taskReport", targetId: report?.id || null, businessId: task.businessId, metadata: { taskId: task.id, fileName: file.name } });
-      logAuditSafe({ profile, action: "file_uploaded", targetType: "file", targetId: uploaded.public_id || null, businessId: task.businessId, metadata: { fileName: file.name, taskId: task.id } });
+      logAuditSafe({ profile, action: "file_uploaded", targetType: "file", targetId: fileMetadataId, businessId: task.businessId, metadata: { fileName: file.name, taskId: task.id } });
       const notification = { type: NOTIFICATION_TYPES.reportSubmitted, title: "Laporan tugas dikirim", body: description, organizationId: task.organizationId, businessId: task.businessId, targetType: "taskReport", targetId: report?.id || null };
       notifySafe({ ...notification, audience: "owner" });
       notifySafe({ ...notification, audience: "admins", permission: "reviewSubmissions" });

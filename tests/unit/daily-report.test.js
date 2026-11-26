@@ -92,4 +92,9 @@ describe("daily report wiring", () => {
     expect(fileUploadApi).toContain('db.collection("dailyReports")');
     expect(uploadService).toContain('post("/api/file-upload", { reportId, fileName, resourceType })');
   });
+
+  it("sends file metadata with the API publicId field", () => {
+    expect(dailyView).toContain("publicId: signature.public_id");
+    expect(dailyView).not.toContain("cloudinaryPublicId");
+  });
 });

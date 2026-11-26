@@ -44,6 +44,16 @@ describe("task list wiring", () => {
     expect(view).toContain("listTasksForBusiness(profile.organizationId, businessId, max)");
   });
 
+  it("loads task reports for employee views", () => {
+    expect(view).toContain("listTaskReportsForUser(profile.uid)");
+    expect(view).toContain("listTaskReportsForUser(context.assigneeId)");
+  });
+
+  it("sends file metadata with the API publicId field", () => {
+    expect(view).toContain("publicId: signature.public_id");
+    expect(view).not.toContain("cloudinaryPublicId");
+  });
+
   it("uses datetime-local deadline fields", () => {
     expect(view).toContain('type="datetime-local"');
     expect(view).toContain("toDateTimeLocalValue(task.deadline)");
