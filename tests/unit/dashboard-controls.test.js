@@ -51,6 +51,12 @@ describe("loading motion foundation", () => {
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
+  it("keeps mobile modals within the viewport", () => {
+    expect(css).toContain(".activity-event > div { min-width: 0; }");
+    expect(css).toContain(".daily-report-error:empty, .daily-report-message:empty { display: none; }");
+    expect(css).toContain(".daily-report-close { width: 44px");
+  });
+
   it("sets and restores busy control state", () => {
     const classes = new Set();
     const attributes = new Map();
