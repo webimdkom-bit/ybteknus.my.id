@@ -1,17 +1,7 @@
 import { getBusiness, listEmployeeSchedules, listShifts } from "../../lib/firestore/repositories.js";
 import { getDateKey, formatInAppZone } from "../../lib/utils/time.js";
-import { groupEmployeeSchedules, weekdayKey } from "./schedule-calculations.js";
+import { groupEmployeeSchedules } from "./schedule-calculations.js";
 import { escapeHtml, setRegionBusy } from "../../lib/utils/html.js";
-
-const WEEKDAY_LABELS = Object.freeze({
-  sunday: "Minggu",
-  monday: "Senin",
-  tuesday: "Selasa",
-  wednesday: "Rabu",
-  thursday: "Kamis",
-  friday: "Jumat",
-  saturday: "Sabtu",
-});
 
 function scheduleDateLabel(date) {
   const value = `${String(date ?? "").slice(0, 10)}T00:00:00Z`;
@@ -55,9 +45,8 @@ export async function openEmployeeScheduleViewer({ profile }) {
       const startTime = shiftMap.get(schedule.shiftId)?.startTime || "";
       const endTime = shiftMap.get(schedule.shiftId)?.endTime || "";
       const businessName = businessMap.get(schedule.businessId) || "Bisnis";
-      const dayLabel = WEEKDAY_LABELS[weekdayKey(schedule.date)] || "";
       const timeLabel = startTime && endTime ? ` · ${escapeHtml(startTime)}–${escapeHtml(endTime)}` : "";
-      return `<div class="shift-row employee-schedule-row"><div><strong>${scheduleDateLabel(schedule.date)}</strong><span>${escapeHtml(shiftName)}${timeLabel} · ${escapeHtml(businessName)}${dayLabel ? ` · ${escapeHtml(dayLabel)}` : ""}</span></div><b class="status-pill done">Aktif</b></div>`;
+      return `<div class="shift-row employee-schedule-row"><div><strong>${scheduleDateLabel(schedule.date)}</strong><span>${escapeHtml(shiftName)}${timeLabel} · ${escapeHtml(businessName)}</span></div><b class="status-pill done">Aktif</b></div>`;
     }).join("")}</section>`).join("");
   };
 
