@@ -735,10 +735,7 @@ export async function saveDailyReport({ profile, reportDate, report }) {
 }
 
 export async function reviewDailyReport(reportId, changes) {
-  await updateDoc(doc(db, COLLECTIONS.DAILY_REPORTS, reportId), {
-    ...changes,
-    updatedAt: serverTimestamp(),
-  });
+  await updateDoc(doc(db, COLLECTIONS.DAILY_REPORTS, reportId), changes);
 }
 
 export async function listDailyReportsForUser(userId, from, to) {
