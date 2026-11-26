@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { isScheduleEffective, pickActiveSchedule } from "../../src/features/schedules/schedule-calculations.js";
+import { dateSpanDays, eachScheduleDate, isScheduleEffective, pickActiveSchedule, weekdayKey } from "../../src/features/schedules/schedule-calculations.js";
 import { isValidDateKey } from "../../src/features/schedules/schedule-service.js";
 
 const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 const service = read("../../src/features/schedules/schedule-service.js");
 const repositories = read("../../src/lib/firestore/repositories.js");
 const view = read("../../src/features/schedules/schedule-view.js");
+const audit = read("../../api/audit-log.js");
 
 describe("schedule effective helper", () => {
   it("rejects cancelled and future-effective schedules", () => {
@@ -24,6 +25,22 @@ describe("schedule effective helper", () => {
       { id: "future", date: "2026-11-25", businessId: "b1", effectiveFrom: "2026-11-26", createdAt: "2026-11-24T01:00:00.000Z" },
     ], { businessId: "b1", date: "2026-11-25" });
     expect(picked?.id).toBe("new");
+  });
+});
+
+describe("schedule date range", () => {
+  it("computes weekday keys and calendar span", () => {
+    expect(weekdayKey("2026-11-26")).toBe("thursday");
+    expect(weekdayKey("2026-11-28")).toBe("saturday");
+    expect(dateSpanDays("2026-11-26", "2026-11-26")).toBe(1);
+    expect(dateSpanDays("2026-11-26", "2026-11-27")).toBe(2);
+    expect(dateSpanDays("2026-11-30", "2026-11-26")).toBeNull();
+  });
+
+  it("expands only selected weekdays and rejects ranges above 31 days", () => {
+    expect(eachScheduleDate({ from: "2026-11-23", to: "2026-11-29", weekdays: ["monday", "wednesday", "friday"] }))
+      .toEqual(["2026-11-23", "2026-11-25", "2026-11-27"]);
+    expect(eachScheduleDate({ from: "2026-01-01", to: "2026-02-05", weekdays: ["monday"] })).toEqual([]);
   });
 });
 
@@ -48,14 +65,26 @@ describe("bulk schedule assignment wiring", () => {
     expect(view).toContain("Dilewati:");
   });
 
-  it("uses deterministic notifications", () => {
-    expect(view).toContain("id: `schedule_bulk_${result.batchId}`");
+  it("uses deterministic range notifications", () => {
+    expect(view).toContain("id: `schedule_range_${result.batchId}`");
+    expect(audit).toContain('"schedule_range_assigned"');
   });
 
   it("validates real calendar dates and effective dates", () => {
     expect(isValidDateKey("2026-11-26")).toBe(true);
     expect(isValidDateKey("2026-13-99")).toBe(false);
     expect(service).toContain("Tanggal efektif tidak boleh setelah tanggal jadwal.");
+  });
+
+  it("supports range assignment with per-date skips and audit", () => {
+    expect(service).toContain("export async function assignShiftRange(");
+    expect(service).toContain("Rentang maksimal 31 hari kalender.");
+    expect(service).toContain("Sudah memiliki jadwal aktif pada tanggal ini.");
+    expect(view).toContain('id="assign-from"');
+    expect(view).toContain('id="assign-to"');
+    expect(view).toContain("data-range-weekday");
+    expect(view).toContain("data-range-preview");
+    expect(view).toContain("schedule_range_assigned");
   });
 
   it("supports editing and deleting shifts and schedules", () => {

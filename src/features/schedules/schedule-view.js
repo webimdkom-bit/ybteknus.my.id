@@ -1,7 +1,7 @@
 import { getBusiness, listBusinessesForOrganization, listEmployeesForBusiness, listSchedules } from "../../lib/firestore/repositories.js";
 import {
   addShift,
-  assignShiftBulk,
+  assignShiftRange,
   deleteScheduleAssignment,
   deleteShiftAssignment,
   listShifts,
@@ -11,7 +11,8 @@ import {
 import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 import { getDateKey } from "../../lib/utils/time.js";
-import { escapeHtml, setBusy } from "../../lib/utils/html.js";
+import { escapeHtml, setBusy, updateBusyLabel } from "../../lib/utils/html.js";
+import { dateSpanDays, eachScheduleDate } from "./schedule-calculations.js";
 
 const WEEKDAY_VALUES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const WEEKDAY_LABELS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
@@ -44,10 +45,13 @@ export async function openScheduleManager({ profile, onClose }) {
           </form>
           <form class="shift-form assignment-form" id="assignment-form">
             <h3>Tetapkan jadwal karyawan</h3>
-            <p class="field-hint">Jadwal yang ditetapkan langsung dipakai karyawan untuk check-in/check-out pada tanggal tersebut.</p>
+            <p class="field-hint">Pilih karyawan, shift, rentang tanggal, dan hari yang ingin dijadwalkan. Maksimal 31 hari.</p>
             <div class="field"><label>Karyawan <span>(karyawan sesuai bisnis)</span></label><div class="task-assignee-list" id="assign-employees"><p class="task-empty">Memuat karyawan...</p></div></div>
             <div class="field"><label for="assign-shift">Shift</label><select id="assign-shift" required><option value="">Pilih shift</option></select></div>
-            <div class="schedule-fields"><div class="field"><label for="assign-date">Tanggal jadwal</label><input id="assign-date" type="date" required /></div><div class="field"><label for="assign-effective">Tanggal efektif</label><input id="assign-effective" type="date" required /></div></div>
+            <div class="schedule-fields"><div class="field"><label for="assign-from">Tanggal mulai</label><input id="assign-from" type="date" required /></div><div class="field"><label for="assign-to">Tanggal selesai</label><input id="assign-to" type="date" required /></div></div>
+            <div class="field"><label>Hari yang dijadwalkan</label><div class="weekday-list" data-range-weekdays>${WEEKDAY_LABELS.map((day, index) => `<label><input type="checkbox" data-range-weekday value="${WEEKDAY_VALUES[index]}" ${index < 5 ? "checked" : ""} />${day}</label>`).join("")}</div></div>
+            <div class="field"><label for="assign-effective">Tanggal efektif</label><input id="assign-effective" type="date" required /></div>
+            <p class="field-hint" data-range-preview>Menunggu tanggal...</p>
             <p class="schedule-error" role="alert"></p><p class="schedule-message" role="status"></p><button class="primary-button" type="submit">Tetapkan jadwal <span>→</span></button>
           </form>
           <form class="shift-form schedule-edit-form" data-schedule-editor hidden>
@@ -81,7 +85,10 @@ export async function openScheduleManager({ profile, onClose }) {
   const businessSelect = overlay.querySelector("#shift-business");
   const employeeList = overlay.querySelector("#assign-employees");
   const shiftSelect = overlay.querySelector("#assign-shift");
-  const dateInput = overlay.querySelector("#assign-date");
+  const fromInput = overlay.querySelector("#assign-from");
+  const toInput = overlay.querySelector("#assign-to");
+  const weekdayInputs = overlay.querySelectorAll("[data-range-weekday]");
+  const rangePreview = overlay.querySelector("[data-range-preview]");
   const effectiveInput = overlay.querySelector("#assign-effective");
   const shiftForm = overlay.querySelector("#shift-form");
   const shiftIdInput = overlay.querySelector("[data-shift-id]");
@@ -95,8 +102,41 @@ export async function openScheduleManager({ profile, onClose }) {
   const scheduleEditEffective = overlay.querySelector("#schedule-edit-effective");
   const scheduleEditStatus = overlay.querySelector("#schedule-edit-status");
   const today = getDateKey();
-  dateInput.value = today;
+  const addDays = (dateKey, amount) => {
+    const value = new Date(`${dateKey}T00:00:00Z`);
+    value.setUTCDate(value.getUTCDate() + amount);
+    return value.toISOString().slice(0, 10);
+  };
+  fromInput.value = today;
+  toInput.value = addDays(today, 4);
   effectiveInput.value = today;
+  const selectedWeekdays = () => [...weekdayInputs].filter((input) => input.checked).map((input) => input.value);
+  const selectedEmployeeIds = () => [...employeeList.querySelectorAll("[data-assign-employee]:checked")].map((input) => input.value);
+  const updateRangePreview = () => {
+    const span = dateSpanDays(fromInput.value, toInput.value);
+    const employeeCount = selectedEmployeeIds().length;
+    const weekdays = selectedWeekdays();
+    if (!span) {
+      rangePreview.textContent = "Pilih rentang tanggal yang valid.";
+      return;
+    }
+    if (span > 31) {
+      rangePreview.textContent = `Rentang ${span} hari melebihi batas 31 hari.`;
+      return;
+    }
+    if (!weekdays.length) {
+      rangePreview.textContent = "Pilih minimal satu hari.";
+      return;
+    }
+    const dates = eachScheduleDate({ from: fromInput.value, to: toInput.value, weekdays, maxDays: 31 });
+    rangePreview.textContent = dates.length
+      ? `${dates.length} tanggal · ${dates.length * employeeCount} jadwal akan dibuat`
+      : "Tidak ada tanggal yang cocok dengan hari yang dipilih.";
+  };
+  fromInput.addEventListener("input", updateRangePreview);
+  toInput.addEventListener("input", updateRangePreview);
+  weekdayInputs.forEach((input) => input.addEventListener("change", updateRangePreview));
+  employeeList.addEventListener("change", updateRangePreview);
 
   const businesses = profile.role === "owner"
     ? await listBusinessesForOrganization(organizationId)
@@ -168,6 +208,7 @@ export async function openScheduleManager({ profile, onClose }) {
       employeeList.innerHTML = employees.length
         ? employees.map((employee) => `<label class="task-assignee-option"><input type="checkbox" value="${employee.id}" data-assign-employee="${employee.id}" /><span>${escapeHtml(employee.displayName || employee.email || "Tanpa nama")}</span></label>`).join("")
         : `<p class="task-empty">Belum ada karyawan pada bisnis ini.</p>`;
+      updateRangePreview();
     } catch (error) {
       list.innerHTML = `<p class="shift-error">${escapeHtml(error.message)}</p>`;
     }
@@ -246,23 +287,55 @@ export async function openScheduleManager({ profile, onClose }) {
     const form = event.currentTarget;
     const error = form.querySelector(".schedule-error");
     const message = form.querySelector(".schedule-message");
-    const userIds = [...employeeList.querySelectorAll("[data-assign-employee]:checked")].map((input) => input.value);
+    const userIds = selectedEmployeeIds();
     const shiftId = shiftSelect.value;
-    if (!userIds.length || !shiftId || !dateInput.value || !effectiveInput.value) {
-      error.textContent = "Pilih minimal satu karyawan, shift, tanggal, dan tanggal efektif.";
+    const weekdays = selectedWeekdays();
+    if (!userIds.length || !shiftId || !fromInput.value || !toInput.value || !effectiveInput.value || !weekdays.length) {
+      error.textContent = "Pilih karyawan, shift, rentang tanggal, hari, dan tanggal efektif.";
       return;
     }
-    const restore = setBusy(form.querySelector("button[type=submit]"), "Menetapkan jadwal...");
+    const submit = form.querySelector("button[type=submit]");
+    const restore = setBusy(submit, "Menetapkan jadwal...");
     try {
-      const result = await assignShiftBulk({ organizationId, businessId, userIds, shiftId, date: dateInput.value, effectiveFrom: effectiveInput.value, assignedBy: profile.uid });
-      result.created.forEach((schedule) => logAuditSafe({ profile, action: "schedule_assigned", targetType: "schedule", targetId: schedule.id, businessId, metadata: { userId: schedule.userId, shiftId, date: schedule.date, effectiveFrom: schedule.effectiveFrom, batchId: result.batchId } }));
+      const result = await assignShiftRange({
+        organizationId,
+        businessId,
+        userIds,
+        shiftId,
+        from: fromInput.value,
+        to: toInput.value,
+        weekdays,
+        effectiveFrom: effectiveInput.value,
+        assignedBy: profile.uid,
+        onProgress: (index, total) => updateBusyLabel(submit, `Menetapkan ${index}/${total}...`),
+      });
+      logAuditSafe({
+        profile,
+        action: "schedule_range_assigned",
+        targetType: "schedule",
+        targetId: result.created[0]?.id || null,
+        businessId,
+        metadata: { userIds, from: fromInput.value, to: toInput.value, weekdays, created: result.created.length, skipped: result.skipped.length, batchId: result.batchId },
+      });
       if (result.created.length) {
-        notifySafe({ id: `schedule_bulk_${result.batchId}`, type: NOTIFICATION_TYPES.scheduleAssigned, title: "Jadwal kerja ditetapkan", body: `${dateInput.value} · berlaku sejak ${effectiveInput.value}`, organizationId, businessId, targetType: "schedule", targetId: result.created[0].id, userIds: result.created.map((schedule) => schedule.userId) });
+        notifySafe({
+          id: `schedule_range_${result.batchId}`,
+          type: NOTIFICATION_TYPES.scheduleAssigned,
+          title: "Jadwal kerja ditetapkan",
+          body: `${fromInput.value} s/d ${toInput.value} · ${result.created.length} jadwal`,
+          organizationId,
+          businessId,
+          targetType: "schedule",
+          targetId: result.created[0].id,
+          userIds: result.created.map((schedule) => schedule.userId),
+        });
       }
-      const skipped = result.skipped.map((item) => `${employeeNames.get(item.userId) || item.userId}: ${item.reason}`).join(" · ");
-      message.textContent = `${result.created.length} jadwal ditetapkan.${skipped ? ` Dilewati: ${skipped}` : ""}`;
+      const skipped = result.skipped.slice(0, 12).map((item) => `${employeeNames.get(item.userId) || item.userId} · ${item.date}: ${item.reason}`).join(" · ");
+      const more = result.skipped.length > 12 ? ` · masih ${result.skipped.length - 12} lagi` : "";
+      message.textContent = `${result.created.length} jadwal ditetapkan pada ${result.dates.length} tanggal.${skipped ? ` Dilewati: ${skipped}${more}` : ""}`;
       error.textContent = "";
       employeeList.querySelectorAll("[data-assign-employee]").forEach((input) => { input.checked = false; });
+      updateRangePreview();
       await load();
     } catch (assignmentError) { error.textContent = assignmentError.message; }
     finally { restore(); }

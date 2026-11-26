@@ -28,6 +28,35 @@ export function getAttendanceStatus({ actualIn, actualOut, lateAfterToleranceMin
   return "hadir";
 }
 
+export function dateSpanDays(from, to) {
+  const start = new Date(`${String(from ?? "").slice(0, 10)}T00:00:00Z`);
+  const end = new Date(`${String(to ?? "").slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return null;
+  return Math.round((end - start) / 86400000) + 1;
+}
+
+export function weekdayKey(date) {
+  const value = new Date(`${String(date ?? "").slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(value.getTime())) return "";
+  return ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][value.getUTCDay()];
+}
+
+export function eachScheduleDate({ from, to, weekdays = [], maxDays = 31 }) {
+  const span = dateSpanDays(from, to);
+  if (span == null || span > maxDays) return [];
+  const start = new Date(`${String(from ?? "").slice(0, 10)}T00:00:00Z`);
+  const end = new Date(`${String(to ?? "").slice(0, 10)}T00:00:00Z`);
+  const allowed = new Set(weekdays.filter((day) => typeof day === "string"));
+  const dates = [];
+  const cursor = new Date(start);
+  while (cursor <= end && dates.length < maxDays) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (!allowed.size || allowed.has(weekdayKey(key))) dates.push(key);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
 export function isScheduleEffective(schedule, date) {
   if (!schedule || schedule.status === "cancelled") return false;
   if (!date || !schedule.date || schedule.date !== date) return false;

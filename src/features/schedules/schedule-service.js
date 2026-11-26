@@ -11,7 +11,7 @@ import {
   updateSchedule,
   updateShift,
 } from "../../lib/firestore/repositories.js";
-import { calculateAttendanceTiming, getAttendanceStatus, isScheduleEffective, toMinutes } from "./schedule-calculations.js";
+import { calculateAttendanceTiming, dateSpanDays, eachScheduleDate, getAttendanceStatus, isScheduleEffective, toMinutes } from "./schedule-calculations.js";
 
 export const WEEKDAYS = Object.freeze([
   "monday",
@@ -78,6 +78,78 @@ export async function assignShiftBulk({ organizationId, businessId, userIds, shi
   })));
   skipped.push(...result.skipped.map((userId) => ({ userId, reason: "Jadwal sudah dibuat sebelumnya." })));
   return { created: result.created, skipped, batchId, shift };
+}
+
+export async function assignShiftRange({
+  organizationId,
+  businessId,
+  userIds,
+  shiftId,
+  from,
+  to,
+  weekdays = [],
+  effectiveFrom,
+  assignedBy,
+  onProgress,
+}) {
+  const uniqueIds = [...new Set((userIds || []).filter(Boolean))];
+  if (!organizationId || !businessId || !uniqueIds.length || !shiftId || !from || !to) {
+    throw new Error("Bisnis, karyawan, shift, tanggal mulai, dan tanggal selesai wajib diisi.");
+  }
+  if (uniqueIds.length > 100) throw new Error("Maksimal 100 karyawan per penetapan jadwal.");
+  if (!isValidDateKey(from) || !isValidDateKey(to)) throw new Error("Format tanggal harus YYYY-MM-DD.");
+  if (from > to) throw new Error("Tanggal selesai tidak boleh sebelum tanggal mulai.");
+  if (effectiveFrom && !isValidDateKey(effectiveFrom)) throw new Error("Format tanggal efektif harus YYYY-MM-DD.");
+  if (effectiveFrom && effectiveFrom > from) throw new Error("Tanggal efektif tidak boleh setelah tanggal mulai.");
+  const span = dateSpanDays(from, to);
+  if (span == null || span > 31) throw new Error("Rentang maksimal 31 hari kalender.");
+  if (!weekdays.length) throw new Error("Pilih minimal satu hari kerja.");
+  const dates = eachScheduleDate({ from, to, weekdays, maxDays: 31 });
+  if (!dates.length) throw new Error("Tidak ada tanggal yang cocok dengan hari yang dipilih.");
+  if (dates.length * uniqueIds.length > 400) throw new Error("Rentang ini menghasilkan terlalu banyak jadwal. Persempit tanggal atau karyawan.");
+  if (typeof onProgress === "function") onProgress(0, dates.length, 0);
+
+  const shift = await getShift(shiftId);
+  if (!shift || shift.status === "inactive" || shift.organizationId !== organizationId || shift.businessId !== businessId) {
+    throw new Error("Shift tidak valid untuk bisnis ini.");
+  }
+
+  const employees = await listEmployeesForBusiness(organizationId, businessId);
+  const validIds = new Set(employees.map((employee) => employee.id));
+  const skipped = uniqueIds.filter((userId) => !validIds.has(userId)).map((userId) => ({ userId, date: from, reason: "Karyawan tidak aktif di bisnis ini." }));
+  const candidateIds = uniqueIds.filter((userId) => validIds.has(userId));
+  const existing = candidateIds.length ? await listSchedules({ organizationId, businessId, from, to }) : [];
+  const existingKeys = new Set(existing.filter((schedule) => schedule.status !== "cancelled").map((schedule) => `${schedule.userId}_${schedule.date}`));
+
+  const batchId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const items = [];
+  candidateIds.forEach((userId) => {
+    dates.forEach((date) => {
+      if (existingKeys.has(`${userId}_${date}`)) {
+        skipped.push({ userId, date, reason: "Sudah memiliki jadwal aktif pada tanggal ini." });
+        return;
+      }
+      items.push({
+        organizationId,
+        businessId,
+        userId,
+        shiftId,
+        date,
+        effectiveFrom: effectiveFrom || from,
+        assignedBy,
+        batchId,
+      });
+    });
+  });
+
+  const result = await createSchedulesBatch(items);
+  const createdIds = new Set(result.created.map((item) => item.id));
+  result.skipped.forEach((userId) => {
+    const item = items.find((candidate) => candidate.userId === userId && !createdIds.has(scheduleKeyForItem(candidate)));
+    skipped.push({ userId, date: item?.date || from, reason: "Jadwal sudah dibuat sebelumnya." });
+  });
+  if (typeof onProgress === "function") onProgress(dates.length, dates.length, result.created.length);
+  return { created: result.created, skipped, dates, batchId, shift };
 }
 
 export async function assignShift({ organizationId, businessId, userId, shiftId, date, effectiveFrom, assignedBy }) {
@@ -148,6 +220,10 @@ export function isValidDateKey(value) {
 }
 
 export { calculateAttendanceTiming, getAttendanceStatus, listSchedules, listShifts };
+
+function scheduleKeyForItem(item) {
+  return [item.organizationId, item.businessId, item.userId, item.date].map((value) => String(value).replace(/[^a-zA-Z0-9_-]/g, "_")).join("_");
+}
 
 function validateShift({ name, startTime, endTime, breakMinutes, toleranceMinutes, workDays }) {
   if (!name?.trim() || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {
