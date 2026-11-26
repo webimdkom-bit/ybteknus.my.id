@@ -1,6 +1,6 @@
 import { listFilesForBusiness, listFilesForOrganization, listFilesForUser } from "../../lib/firestore/repositories.js";
 import { requestFileAccess, requestFileDeletion } from "../files/file-upload-service.js";
-import { escapeHtml } from "../../lib/utils/html.js";
+import { escapeHtml, openWithBusy } from "../../lib/utils/html.js";
 
 export async function openFileManager({ profile }) {
   const overlay = document.createElement("div");
@@ -24,8 +24,7 @@ export async function openFileManager({ profile }) {
         : `<div class="role-empty-state"><strong>Belum ada file.</strong><span>Lampiran tugas dan dokumen akan tampil di sini.</span></div>`;
       list.querySelectorAll("[data-file-open]").forEach((button) => button.addEventListener("click", async () => {
         try {
-          const result = await requestFileAccess(button.dataset.fileOpen);
-          if (result?.url) window.open(result.url, "_blank", "noopener,noreferrer");
+          await openWithBusy(button, async () => (await requestFileAccess(button.dataset.fileOpen))?.url);
         } catch (error) { window.alert(error.message); }
       }));
       list.querySelectorAll("[data-file-delete]").forEach((button) => button.addEventListener("click", async () => {

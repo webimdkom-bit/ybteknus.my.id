@@ -27,6 +27,7 @@ import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
 import { createOrganization, getBusiness, getOrganization, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, listOrganizationsForOwner, listTasksForUser, updateUserProfile } from "./lib/firestore/repositories.js";
 import { formatInAppZone, getDateKey, getGreeting } from "./lib/utils/time.js";
+import { setRegionBusy } from "./lib/utils/html.js";
 import { pickActiveSchedule } from "./features/schedules/schedule-calculations.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck, FolderOpen } from "lucide";
 
@@ -493,6 +494,7 @@ function applyDashboardData(viewModel) {
 }
 
 async function refreshDashboard(profile) {
+  const restore = setRegionBusy(document.querySelector(".dashboard"));
   try {
     const viewModel = profile.role === "admin"
       ? await loadAdminDashboardData(profile, selectedDateKey)
@@ -505,6 +507,8 @@ async function refreshDashboard(profile) {
     if (activityList) activityList.innerHTML = `<div class="role-empty-state"><strong>Data belum tersedia.</strong><span>${escapeHtml(error?.message || "Coba muat ulang halaman.")}</span></div>`;
     const adminDetail = document.querySelector("[data-admin-detail]");
     if (adminDetail) adminDetail.innerHTML = `<div class="role-empty-state"><strong>Data belum tersedia.</strong><span>${escapeHtml(error?.message || "Coba muat ulang halaman.")}</span></div>`;
+  } finally {
+    restore();
   }
 }
 

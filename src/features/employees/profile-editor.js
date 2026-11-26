@@ -1,6 +1,6 @@
 import { updateUserProfile } from "../../lib/firestore/repositories.js";
 import { requestProfileUploadSignature, uploadFileToCloudinary } from "../files/file-upload-service.js";
-import { escapeHtml } from "../../lib/utils/html.js";
+import { escapeHtml, setBusy, updateBusyLabel } from "../../lib/utils/html.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 
 export async function openProfileEditor(profile) {
@@ -14,20 +14,38 @@ export async function openProfileEditor(profile) {
 
   const form = overlay.querySelector(".profile-form");
   const fileInput = overlay.querySelector("[data-profile-photo]");
+  const photoButton = overlay.querySelector("[data-profile-photo-button]");
   let photoURL = profile.photoURL || "";
-  overlay.querySelector("[data-profile-photo-button]").addEventListener("click", () => fileInput.click());
+  photoButton.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) { overlay.querySelector(".profile-error").textContent = "Hanya file gambar yang didukung."; return; }
-    if (file.size > 10 * 1024 * 1024) { overlay.querySelector(".profile-error").textContent = "Ukuran maksimal 10 MB."; return; }
+    const errorElement = overlay.querySelector(".profile-error");
+    const messageElement = overlay.querySelector(".profile-message");
+    errorElement.textContent = "";
+    if (!file.type.startsWith("image/")) { errorElement.textContent = "Hanya file gambar yang didukung."; return; }
+    if (file.size > 10 * 1024 * 1024) { errorElement.textContent = "Ukuran maksimal 10 MB."; return; }
+    const restoreButton = setBusy(photoButton, "Mengunggah 0%");
+    fileInput.disabled = true;
     try {
       const signature = await requestProfileUploadSignature(file.name);
-      const uploaded = await uploadFileToCloudinary({ file, signature, folder: signature.folder, publicId: signature.public_id });
+      const uploaded = await uploadFileToCloudinary({
+        file,
+        signature,
+        folder: signature.folder,
+        publicId: signature.public_id,
+        onProgress: (progress) => updateBusyLabel(photoButton, `Mengunggah ${progress}%`),
+      });
       photoURL = uploaded.secure_url;
       overlay.querySelector(".profile-photo").innerHTML = `<img src="${escapeHtml(photoURL)}" alt="Foto profil" />`;
-      overlay.querySelector(".profile-message").textContent = "Foto berhasil diunggah. Simpan untuk menerapkan.";
-    } catch (error) { overlay.querySelector(".profile-error").textContent = error.message; }
+      messageElement.textContent = "Foto berhasil diunggah. Simpan untuk menerapkan.";
+    } catch (error) {
+      errorElement.textContent = error.message;
+    } finally {
+      restoreButton();
+      fileInput.disabled = false;
+      fileInput.value = "";
+    }
   });
 
   form.addEventListener("submit", async (event) => {
@@ -35,6 +53,7 @@ export async function openProfileEditor(profile) {
     const data = Object.fromEntries(new FormData(form));
     const error = overlay.querySelector(".profile-error");
     const message = overlay.querySelector(".profile-message");
+    const restoreButton = setBusy(form.querySelector('button[type="submit"]'), "Menyimpan profil...");
     error.textContent = "";
     try {
       await updateUserProfile(profile.uid, {
@@ -47,6 +66,10 @@ export async function openProfileEditor(profile) {
       message.textContent = "Profil berhasil disimpan.";
       Object.assign(profile, { phone: data.phone.trim(), position: data.position.trim(), identityNumber: data.identityNumber.trim(), photoURL });
       setTimeout(close, 700);
-    } catch (submitError) { error.textContent = submitError.message; }
+    } catch (submitError) {
+      error.textContent = submitError.message;
+    } finally {
+      restoreButton();
+    }
   });
 }

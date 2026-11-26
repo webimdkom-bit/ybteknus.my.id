@@ -45,7 +45,7 @@ export function requestFileAccess(fileId) {
   return post("/api/file-access", { fileId });
 }
 
-export async function uploadFileToCloudinary({ file, signature, folder, publicId }) {
+export async function uploadFileToCloudinary({ file, signature, folder, publicId, onProgress }) {
   if (!file) throw new Error("File wajib dipilih.");
   if (!ALLOWED_TYPES.some((type) => file.type?.startsWith(type))) throw new Error("Hanya gambar, PDF, atau dokumen Word yang didukung.");
   if (file.size > MAX_FILE_SIZE) throw new Error("Ukuran file maksimal 10 MB.");
@@ -56,8 +56,24 @@ export async function uploadFileToCloudinary({ file, signature, folder, publicId
   if (signature.apiKey) formData.append("api_key", signature.apiKey);
   if (publicId) formData.append("public_id", publicId);
   if (folder) formData.append("folder", folder);
-  const response = await fetch(signature.uploadUrl, { method: "POST", body: formData });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || "Upload ke Cloudinary gagal.");
-  return data;
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", signature.uploadUrl);
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable || typeof onProgress !== "function") return;
+      onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    request.onload = () => {
+      let data = {};
+      try { data = JSON.parse(request.responseText); } catch { data = {}; }
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(data?.error?.message || "Upload ke Cloudinary gagal."));
+        return;
+      }
+      if (typeof onProgress === "function") onProgress(100);
+      resolve(data);
+    };
+    request.onerror = () => reject(new Error("Upload ke Cloudinary gagal."));
+    request.send(formData);
+  });
 }

@@ -2,6 +2,9 @@ import { getDateKey } from "../attendance/attendance-service.js";
 import { listBusinessesForOrganization } from "../../lib/firestore/repositories.js";
 import { exportAttendanceExcel, exportAttendancePdf } from "./export-service.js";
 import { buildAttendanceReport } from "./report-service.js";
+import { setBusy } from "../../lib/utils/html.js";
+
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
 export async function openReportViewer({ profile }) {
   const today = getDateKey(new Date());
@@ -88,17 +91,21 @@ export async function openReportViewer({ profile }) {
   form.addEventListener("submit", (event) => { event.preventDefault(); load(); });
   pdfButton.addEventListener("click", async () => {
     if (!current) return;
-    pdfButton.disabled = true;
-    try { await exportAttendancePdf({ rows: current.rows, from: current.from, to: current.to }); }
-    catch (exportError) { error.textContent = exportError.message; }
-    pdfButton.disabled = false;
+    const restore = setBusy(pdfButton, "Menyiapkan PDF...");
+    try {
+      await nextFrame();
+      await exportAttendancePdf({ rows: current.rows, from: current.from, to: current.to });
+    } catch (exportError) { error.textContent = exportError.message; }
+    finally { restore(); }
   });
   excelButton.addEventListener("click", async () => {
     if (!current) return;
-    excelButton.disabled = true;
-    try { await exportAttendanceExcel({ rows: current.rows, from: current.from, to: current.to }); }
-    catch (exportError) { error.textContent = exportError.message; }
-    excelButton.disabled = false;
+    const restore = setBusy(excelButton, "Menyiapkan Excel...");
+    try {
+      await nextFrame();
+      await exportAttendanceExcel({ rows: current.rows, from: current.from, to: current.to });
+    } catch (exportError) { error.textContent = exportError.message; }
+    finally { restore(); }
   });
   await load();
 }

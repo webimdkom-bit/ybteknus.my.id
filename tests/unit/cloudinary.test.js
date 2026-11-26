@@ -48,6 +48,11 @@ describe("Cloudinary wiring", () => {
     expect(cloudinary).toContain("apiKey: process.env.CLOUDINARY_API_KEY");
     expect(uploadService).toContain('formData.append("api_key", signature.apiKey)');
   });
+
+  it("reports upload progress", () => {
+    expect(uploadService).toContain("request.upload.onprogress");
+    expect(uploadService).toContain("onProgress(");
+  });
 });
 
 describe("employee audit allowances", () => {

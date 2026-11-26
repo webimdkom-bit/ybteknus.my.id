@@ -24,7 +24,7 @@ import {
 } from "../../lib/firestore/repositories.js";
 import { DEFAULT_TASK_CATEGORIES } from "../../config/constants.js";
 import { formatTaskDeadline, getDeadlineMillis, getTimeStatus, isTaskOverdue, normalizeDeadline, toDateTimeLocalValue } from "./task-status.js";
-import { escapeHtml, safeUrl } from "../../lib/utils/html.js";
+import { escapeHtml, openWithBusy, safeUrl, setBusy, updateBusyLabel } from "../../lib/utils/html.js";
 import { getDateKey, getJakartaISO } from "../../lib/utils/time.js";
 import { recordFileMetadata, requestFileAccess, requestUploadSignature, uploadFileToCloudinary } from "../files/file-upload-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
@@ -359,10 +359,17 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
     const file = input.files?.[0];
     if (!task || !file) return;
     input.disabled = true;
+    const reportButton = overlay.querySelector(`[data-task-action="report"][data-task-id="${task.id}"]`);
+    const restoreActions = [
+      setBusy(reportButton, "Mengunggah 0%"),
+      setBusy(overlay.querySelector(`[data-task-complete="${task.id}"]`), "Menunggu..."),
+      setBusy(overlay.querySelector(`[data-task-action="start"][data-task-id="${task.id}"]`), "Menunggu..."),
+    ];
     try {
       const resourceType = file.type.startsWith("image/") ? "image" : "raw";
       const signature = await requestUploadSignature({ taskId: task.id, fileName: file.name, resourceType });
-      const uploaded = await uploadFileToCloudinary({ file, signature, folder: signature.folder, publicId: signature.public_id });
+      updateBusyLabel(reportButton, "Mengunggah 0%");
+      const uploaded = await uploadFileToCloudinary({ file, signature, folder: signature.folder, publicId: signature.public_id, onProgress: (progress) => updateBusyLabel(reportButton, `Mengunggah ${progress}%`) });
       let fileMetadataId = null;
       try {
         const metadata = await recordFileMetadata({
@@ -380,6 +387,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
         });
         fileMetadataId = metadata?.id || null;
       } catch (metadataError) { console.warn("[tasks] file metadata:", metadataError?.message || metadataError); }
+      updateBusyLabel(reportButton, "Menyimpan laporan...");
       const description = window.prompt("Tulis laporan pekerjaan:", task.description || "");
       if (!description) return;
       const report = await createTaskReport({ taskId: task.id, organizationId: task.organizationId, businessId: task.businessId, userId: profile.uid, description, evidenceUrl: uploaded.secure_url, fileMetadataId, checklist: task.checklist || [] });
@@ -394,9 +402,12 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
       await updateTaskAndDailyReports(task.id, { status: "submitted" });
       await syncTimeStatus(task.id, tasks, "submitted");
     } catch (error) { window.alert(error.message); }
-    input.disabled = false;
-    input.value = "";
-    await reload();
+    finally {
+      restoreActions.forEach((restore) => restore());
+      input.disabled = false;
+      input.value = "";
+      await reload();
+    }
   }));
   overlay.querySelectorAll("[data-report-action]").forEach((button) => button.addEventListener("click", async () => {
     const note = window.prompt("Catatan review (opsional):", "") || "";
@@ -520,8 +531,7 @@ function bindTaskActions(overlay, profile, tasks, reports, canManage, reload) {
   }));
   overlay.querySelectorAll("[data-file-access]").forEach((button) => button.addEventListener("click", async () => {
     try {
-      const result = await requestFileAccess(button.dataset.fileAccess);
-      if (result?.url) window.open(result.url, "_blank", "noopener,noreferrer");
+      await openWithBusy(button, async () => (await requestFileAccess(button.dataset.fileAccess))?.url);
     } catch (error) { window.alert(error.message); }
   }));
   overlay.querySelectorAll("[data-task-cancel]").forEach((button) => button.addEventListener("click", async () => {

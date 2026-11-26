@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { setBusy, updateBusyLabel } from "../../src/lib/utils/html.js";
 
 const main = readFileSync(fileURLToPath(new URL("../../src/main.js", import.meta.url)), "utf8");
+const css = readFileSync(fileURLToPath(new URL("../../src/styles/main.css", import.meta.url)), "utf8");
 
 describe("dashboard control wiring", () => {
   it("wires owner hero CTA to task manager", () => {
@@ -34,5 +36,43 @@ describe("dashboard control wiring", () => {
   it("uses a time-aware greeting for all dashboards", () => {
     expect(main).not.toContain("Good morning");
     expect((main.match(/\$\{getGreeting\(\)\},<br>/g) || []).length).toBe(3);
+  });
+
+  it("marks the dashboard busy while refreshing", () => {
+    expect(main).toContain('setRegionBusy(document.querySelector(".dashboard"))');
+  });
+});
+
+describe("loading motion foundation", () => {
+  it("defines reusable busy and reduced-motion styles", () => {
+    expect(css).toContain("@keyframes yb-spin");
+    expect(css).toContain(".is-busy");
+    expect(css).toContain(".is-region-busy");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
+  it("sets and restores busy control state", () => {
+    const classes = new Set();
+    const attributes = new Map();
+    const button = {
+      innerHTML: "Kirim <span>→</span>",
+      disabled: false,
+      textContent: "",
+      classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name) },
+      setAttribute: (name, value) => attributes.set(name, value),
+      removeAttribute: (name) => attributes.delete(name),
+    };
+    const restore = setBusy(button, "Mengunggah 0%");
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe("Mengunggah 0%");
+    expect(classes.has("is-busy")).toBe(true);
+    expect(attributes.get("aria-busy")).toBe("true");
+    updateBusyLabel(button, "Mengunggah 50%");
+    expect(button.textContent).toBe("Mengunggah 50%");
+    restore();
+    expect(button.disabled).toBe(false);
+    expect(button.innerHTML).toBe("Kirim <span>→</span>");
+    expect(classes.has("is-busy")).toBe(false);
+    expect(attributes.has("aria-busy")).toBe(false);
   });
 });

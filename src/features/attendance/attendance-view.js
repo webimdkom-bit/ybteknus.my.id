@@ -4,6 +4,7 @@ import { logAuditSafe } from "../audit-trail/index.js";
 import { getDateKey } from "../../lib/utils/time.js";
 import { isDailyReportReady } from "../../lib/utils/daily-report.js";
 import { openDailyReportViewer } from "../reports/daily-report-view.js";
+import { setBusy } from "../../lib/utils/html.js";
 
 export async function openLocationSettings({ profile }) {
   const businesses = await listBusinessesForOrganization(profile.organizationId);
@@ -99,17 +100,21 @@ export async function openAttendancePanel({ profile }) {
   overlay.querySelector("[data-attendance-daily-report]")?.addEventListener("click", () => openDailyReportViewer({ profile }));
   attendanceButtons.forEach((button) => button.addEventListener("click", async () => {
     const error = overlay.querySelector(".attendance-error");
+    const type = button.dataset.attendanceType;
     error.textContent = "";
     if (!businessId) { error.textContent = "Akun Anda belum memiliki bisnis aktif."; return; }
-    button.disabled = true;
-    button.textContent = "Mencari lokasi...";
+    const restoreButtons = [...attendanceButtons].map((item) => setBusy(item, item === button ? "Memproses absensi..." : "Menunggu..."));
+    result.textContent = `${type === "check-in" ? "Check-in" : "Check-out"}: mencari lokasi dan menyimpan data...`;
     try {
-      const attendance = await recordGpsAttendance({ userId: profile.uid, organizationId: profile.organizationId, businessId, type: button.dataset.attendanceType });
+      const attendance = await recordGpsAttendance({ userId: profile.uid, organizationId: profile.organizationId, businessId, type });
       result.textContent = `${attendance.type === "check-in" ? "Check-in" : "Check-out"} berhasil. Jarak Anda ${attendance.distanceMeters}m dari titik kantor.`;
       result.classList.add("is-success");
-    } catch (attendanceError) { error.textContent = attendanceError.message; }
-    button.innerHTML = `${button.dataset.attendanceType === "check-in" ? "Check-in" : "Check-out"} <span>→</span>`;
-    await refreshAttendanceState();
+    } catch (attendanceError) {
+      error.textContent = attendanceError.message;
+    } finally {
+      restoreButtons.forEach((restore) => restore());
+      await refreshAttendanceState();
+    }
   }));
   refreshAttendanceState();
 }

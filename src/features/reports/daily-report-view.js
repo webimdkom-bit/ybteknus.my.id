@@ -1,5 +1,5 @@
 import { getDateKey, getJakartaISO } from "../../lib/utils/time.js";
-import { escapeHtml } from "../../lib/utils/html.js";
+import { escapeHtml, openWithBusy, setBusy } from "../../lib/utils/html.js";
 import {
   getDailyReport,
   listBusinessesForOrganization,
@@ -123,37 +123,59 @@ function bindPersonalEvents(body, profile, reportDate, report, apply) {
     return { report: { ...report, notes, status, submittedAt }, message: "Laporan berhasil dikirim." };
   }));
   body.querySelector("#daily-report-files")?.addEventListener("change", async (event) => {
+    const input = event.target;
+    const files = [...input.files];
+    if (!files.length) return;
+    const status = body.querySelector(".daily-report-message");
+    const restoreActions = [
+      setBusy(body.querySelector("[data-daily-save]"), "Menyimpan..."),
+      setBusy(body.querySelector("[data-daily-submit]"), "Mengirim..."),
+    ];
+    input.disabled = true;
     let uploadError = "";
-    const files = [...event.target.files];
-    for (const file of files) {
+    let saveError = "";
+    try {
+      for (const [index, file] of files.entries()) {
+        status.textContent = `Mengunggah ${index + 1}/${files.length}: ${file.name} 0%`;
+        try {
+          const resourceType = file.type.startsWith("image/") ? "image" : "raw";
+          const signature = await requestDailyReportUploadSignature({ reportId: report.id, fileName: file.name, resourceType });
+          const uploaded = await uploadFileToCloudinary({
+            file,
+            signature,
+            folder: signature.folder,
+            publicId: signature.public_id,
+            onProgress: (progress) => { status.textContent = `Mengunggah ${index + 1}/${files.length}: ${file.name} ${progress}%`; },
+          });
+          const metadata = await recordFileMetadata({
+            fileName: file.name,
+            resourceType,
+            format: file.name.split(".").pop() || "",
+            publicId: signature.public_id,
+            secureUrl: uploaded.secure_url,
+            organizationId: profile.organizationId,
+            businessId: profile.businessIds?.[0] || null,
+            category: "daily-report-evidence",
+            access: resourceType === "image" ? "public" : "private",
+            targetType: "dailyReport",
+            targetId: report.id,
+          });
+          report.attachments = [...(report.attachments || []), { fileId: metadata.id, fileName: file.name, resourceType, access: resourceType === "image" ? "public" : "private", secureUrl: uploaded.secure_url }];
+        } catch (fileError) { uploadError = fileError.message; }
+      }
       try {
-        const resourceType = file.type.startsWith("image/") ? "image" : "raw";
-        const signature = await requestDailyReportUploadSignature({ reportId: report.id, fileName: file.name, resourceType });
-        const uploaded = await uploadFileToCloudinary({ file, signature, folder: signature.folder, publicId: signature.public_id });
-        const metadata = await recordFileMetadata({
-          fileName: file.name,
-          resourceType,
-          format: file.name.split(".").pop() || "",
-          publicId: signature.public_id,
-          secureUrl: uploaded.secure_url,
-          organizationId: profile.organizationId,
-          businessId: profile.businessIds?.[0] || null,
-          category: "daily-report-evidence",
-          access: resourceType === "image" ? "public" : "private",
-          targetType: "dailyReport",
-          targetId: report.id,
-        });
-        report.attachments = [...(report.attachments || []), { fileId: metadata.id, fileName: file.name, resourceType, access: resourceType === "image" ? "public" : "private", secureUrl: uploaded.secure_url }];
-      } catch (fileError) { uploadError = fileError.message; }
+        await saveDailyReport({ profile, reportDate, report: { notes: report.notes, tasks: report.tasks, attachments: report.attachments, status: report.status, submittedAt: report.submittedAt } });
+      } catch (submitError) { saveError = submitError.message; }
+    } finally {
+      restoreActions.forEach((restore) => restore());
+      input.disabled = false;
+      input.value = "";
     }
-    await saveDailyReport({ profile, reportDate, report: { notes: report.notes, tasks: report.tasks, attachments: report.attachments, status: report.status, submittedAt: report.submittedAt } });
-    event.target.value = "";
-    await apply(async () => ({ report, error: uploadError, message: "Lampiran diperbarui." }));
+    await apply(async () => ({ report, error: saveError || uploadError, message: saveError || uploadError ? "" : "Lampiran diperbarui." }));
   });
   body.querySelectorAll("[data-daily-file-open]").forEach((button) => button.addEventListener("click", async () => {
     try {
-      const result = await requestFileAccess(button.dataset.dailyFileOpen);
-      if (result?.url) window.open(result.url, "_blank", "noopener,noreferrer");
+      await openWithBusy(button, async () => (await requestFileAccess(button.dataset.dailyFileOpen))?.url);
     } catch (fileError) { window.alert(fileError.message); }
   }));
 }
