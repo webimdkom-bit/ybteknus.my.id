@@ -1,28 +1,46 @@
-import { getBusiness, listBusinessesForOrganization, listEmployeesForBusiness } from "../../lib/firestore/repositories.js";
-import { addShift, assignShiftBulk, listShifts } from "./schedule-service.js";
+import { getBusiness, listBusinessesForOrganization, listEmployeesForBusiness, listSchedules } from "../../lib/firestore/repositories.js";
+import {
+  addShift,
+  assignShiftBulk,
+  deleteScheduleAssignment,
+  deleteShiftAssignment,
+  listShifts,
+  updateScheduleAssignment,
+  updateShiftAssignment,
+} from "./schedule-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 import { getDateKey } from "../../lib/utils/time.js";
+import { escapeHtml, setBusy } from "../../lib/utils/html.js";
+
+const WEEKDAY_VALUES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const WEEKDAY_LABELS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
 export async function openScheduleManager({ profile, onClose }) {
   const organizationId = profile.organizationId;
-  let businessId = profile.businessIds?.[0] || null;
+  let businessId = profile.selectedBusinessId || profile.businessIds?.[0] || null;
   let currentShifts = [];
+  let currentSchedules = [];
+  let employeeNames = new Map();
+  let editingShiftId = null;
+  let editingScheduleId = null;
   const overlay = document.createElement("div");
   overlay.className = "schedule-overlay";
   overlay.innerHTML = `
     <section class="schedule-modal" role="dialog" aria-modal="true" aria-labelledby="schedule-title">
-      <div class="schedule-modal-head"><div><p class="eyebrow">WORK SCHEDULES</p><h2 id="schedule-title">Shift & jadwal</h2><p>Buat pola kerja dan tetapkan jadwal individual dengan tanggal efektif.</p></div><button class="icon-button schedule-close" aria-label="Tutup">×</button></div>
+      <div class="schedule-modal-head"><div><p class="eyebrow">WORK SCHEDULES</p><h2 id="schedule-title">Shift & jadwal</h2><p>Buat shift, tetapkan jadwal karyawan, lalu ubah atau hapus data yang sudah dibuat.</p></div><button class="icon-button schedule-close" aria-label="Tutup">×</button></div>
       <div class="schedule-layout">
         <div class="schedule-column">
           <form class="shift-form" id="shift-form">
-            <h3>Buat shift</h3>
+            <h3 data-shift-form-title>Buat shift</h3>
+            <input type="hidden" data-shift-id />
             <div class="field"><label for="shift-name">Nama shift</label><input id="shift-name" name="name" placeholder="Shift pagi" required /></div>
             <div class="field"><label for="shift-business">Bisnis</label><select id="shift-business" name="businessId" required><option value="">Memuat bisnis...</option></select></div>
             <div class="schedule-fields"><div class="field"><label for="shift-start">Jam masuk</label><input id="shift-start" name="startTime" type="time" value="08:00" required /></div><div class="field"><label for="shift-end">Jam pulang</label><input id="shift-end" name="endTime" type="time" value="17:00" required /></div></div>
             <div class="schedule-fields"><div class="field"><label for="shift-break">Istirahat (menit)</label><input id="shift-break" name="breakMinutes" type="number" min="0" value="60" /></div><div class="field"><label for="shift-tolerance">Toleransi (menit)</label><input id="shift-tolerance" name="toleranceMinutes" type="number" min="0" value="15" /></div></div>
-            <div class="field"><label>Hari kerja</label><div class="weekday-list">${["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((day, index) => `<label><input type="checkbox" name="workDays" value="${["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"][index]}" ${index < 5 ? "checked" : ""} />${day}</label>`).join("")}</div></div>
-            <p class="schedule-error" role="alert"></p><button class="primary-button" type="submit">Simpan shift <span>→</span></button>
+            <div class="field"><label>Hari kerja</label><div class="weekday-list">${WEEKDAY_LABELS.map((day, index) => `<label><input type="checkbox" name="workDays" value="${WEEKDAY_VALUES[index]}" ${index < 5 ? "checked" : ""} />${day}</label>`).join("")}</div></div>
+            <p class="schedule-error" role="alert"></p>
+            <div class="shift-form-actions"><button class="primary-button" type="submit" data-shift-submit>Simpan shift <span>→</span></button><button class="secondary-button" type="button" data-shift-cancel hidden>Batal edit</button></div>
           </form>
           <form class="shift-form assignment-form" id="assignment-form">
             <h3>Tetapkan jadwal karyawan</h3>
@@ -32,8 +50,22 @@ export async function openScheduleManager({ profile, onClose }) {
             <div class="schedule-fields"><div class="field"><label for="assign-date">Tanggal jadwal</label><input id="assign-date" type="date" required /></div><div class="field"><label for="assign-effective">Tanggal efektif</label><input id="assign-effective" type="date" required /></div></div>
             <p class="schedule-error" role="alert"></p><p class="schedule-message" role="status"></p><button class="primary-button" type="submit">Tetapkan jadwal <span>→</span></button>
           </form>
+          <form class="shift-form schedule-edit-form" data-schedule-editor hidden>
+            <h3>Ubah jadwal</h3>
+            <input type="hidden" data-schedule-id />
+            <div class="field"><label for="schedule-edit-shift">Shift</label><select id="schedule-edit-shift" required><option value="">Pilih shift</option></select></div>
+            <div class="schedule-fields"><div class="field"><label for="schedule-edit-date">Tanggal jadwal</label><input id="schedule-edit-date" type="date" required /></div><div class="field"><label for="schedule-edit-effective">Tanggal efektif</label><input id="schedule-edit-effective" type="date" required /></div></div>
+            <div class="field"><label for="schedule-edit-status">Status</label><select id="schedule-edit-status"><option value="active">Aktif</option><option value="cancelled">Dibatalkan</option></select></div>
+            <p class="schedule-error" role="alert"></p><p class="schedule-message" role="status"></p>
+            <div class="shift-form-actions"><button class="primary-button" type="submit">Simpan perubahan <span>→</span></button><button class="secondary-button" type="button" data-schedule-cancel>Batal</button></div>
+          </form>
         </div>
-        <div class="shift-list-wrap"><div class="shift-list-head"><h3>Shift tersimpan</h3><span class="shift-count">0</span></div><div class="shift-list"><p class="shift-empty">Belum ada shift untuk bisnis ini.</p></div></div>
+        <div class="schedule-list-wrap">
+          <div class="shift-list-head"><h3>Shift tersimpan</h3><span class="shift-count">0</span></div>
+          <div class="shift-list"><p class="shift-empty">Belum ada shift untuk bisnis ini.</p></div>
+          <div class="shift-list-head schedule-list-head"><h3>Jadwal karyawan</h3><span class="schedule-count">0</span></div>
+          <div class="schedule-list"><p class="shift-empty">Belum ada jadwal untuk bisnis ini.</p></div>
+        </div>
       </div>
     </section>
   `;
@@ -41,13 +73,27 @@ export async function openScheduleManager({ profile, onClose }) {
   const close = () => { overlay.remove(); onClose?.(); };
   overlay.querySelector(".schedule-close").addEventListener("click", close);
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+
   const list = overlay.querySelector(".shift-list");
+  const scheduleList = overlay.querySelector(".schedule-list");
   const count = overlay.querySelector(".shift-count");
+  const scheduleCount = overlay.querySelector(".schedule-count");
   const businessSelect = overlay.querySelector("#shift-business");
   const employeeList = overlay.querySelector("#assign-employees");
   const shiftSelect = overlay.querySelector("#assign-shift");
   const dateInput = overlay.querySelector("#assign-date");
   const effectiveInput = overlay.querySelector("#assign-effective");
+  const shiftForm = overlay.querySelector("#shift-form");
+  const shiftIdInput = overlay.querySelector("[data-shift-id]");
+  const shiftTitle = overlay.querySelector("[data-shift-form-title]");
+  const shiftSubmit = overlay.querySelector("[data-shift-submit]");
+  const shiftCancel = overlay.querySelector("[data-shift-cancel]");
+  const scheduleEditor = overlay.querySelector("[data-schedule-editor]");
+  const scheduleIdInput = overlay.querySelector("[data-schedule-id]");
+  const scheduleEditShift = overlay.querySelector("#schedule-edit-shift");
+  const scheduleEditDate = overlay.querySelector("#schedule-edit-date");
+  const scheduleEditEffective = overlay.querySelector("#schedule-edit-effective");
+  const scheduleEditStatus = overlay.querySelector("#schedule-edit-status");
   const today = getDateKey();
   dateInput.value = today;
   effectiveInput.value = today;
@@ -57,51 +103,142 @@ export async function openScheduleManager({ profile, onClose }) {
     : (await Promise.all((profile.businessIds || []).map((id) => getBusiness(id)))).filter(Boolean);
   const visibleBusinesses = businesses.filter((business) => business.status !== "inactive");
   businessSelect.innerHTML = visibleBusinesses.length
-    ? `<option value="">Pilih bisnis</option>${visibleBusinesses.map((business) => `<option value="${business.id}">${business.name}</option>`).join("")}`
+    ? `<option value="">Pilih bisnis</option>${visibleBusinesses.map((business) => `<option value="${business.id}">${escapeHtml(business.name)}</option>`).join("")}`
     : `<option value="">Belum ada bisnis tersedia</option>`;
-  if (businessId && visibleBusinesses.some((business) => business.id === businessId)) businessSelect.value = businessId;
+  if (!businessId || !visibleBusinesses.some((business) => business.id === businessId)) businessId = visibleBusinesses[0]?.id || null;
+  if (businessId) businessSelect.value = businessId;
 
-  const loadShifts = async () => {
-    try {
-      currentShifts = businessId ? await listShifts(organizationId, businessId) : [];
-      count.textContent = currentShifts.length;
-      list.innerHTML = currentShifts.length
-        ? currentShifts.map((shift) => `<div class="shift-row"><div><strong>${shift.name}</strong><span>${shift.startTime} – ${shift.endTime} · toleransi ${shift.toleranceMinutes}m</span></div><b>${shift.workDays?.length || 0} hari</b></div>`).join("")
-        : `<p class="shift-empty">Belum ada shift untuk bisnis ini.</p>`;
-      shiftSelect.innerHTML = currentShifts.length
-        ? currentShifts.map((shift) => `<option value="${shift.id}">${shift.name} · ${shift.startTime}–${shift.endTime}</option>`).join("")
-        : `<option value="">Belum ada shift</option>`;
-      if (businessId) {
-        const employees = await listEmployeesForBusiness(organizationId, businessId);
-        employeeList.innerHTML = employees.length
-          ? employees.map((employee) => `<label class="task-assignee-option"><input type="checkbox" value="${employee.id}" data-assign-employee="${employee.id}" /><span>${escapeHtml(employee.displayName || employee.email || "Tanpa nama")}</span></label>`).join("")
-          : `<p class="task-empty">Belum ada karyawan pada bisnis ini.</p>`;
-      } else {
-        employeeList.innerHTML = `<p class="task-empty">Pilih bisnis terlebih dahulu.</p>`;
-      }
-    } catch (error) { list.innerHTML = `<p class="shift-error">${error.message}</p>`; }
+  const shiftOptions = (withPlaceholder = true) => `${withPlaceholder ? `<option value="">Pilih shift</option>` : ""}${currentShifts.filter((shift) => shift.status !== "inactive").map((shift) => `<option value="${shift.id}">${escapeHtml(shift.name)} · ${escapeHtml(shift.startTime)}–${escapeHtml(shift.endTime)}</option>`).join("")}`;
+
+  const resetShiftForm = () => {
+    editingShiftId = null;
+    shiftForm.reset();
+    shiftIdInput.value = "";
+    shiftTitle.textContent = "Buat shift";
+    shiftSubmit.innerHTML = `Simpan shift <span>→</span>`;
+    shiftCancel.hidden = true;
+    overlay.querySelector("#shift-start").value = "08:00";
+    overlay.querySelector("#shift-end").value = "17:00";
+    overlay.querySelector("#shift-break").value = "60";
+    overlay.querySelector("#shift-tolerance").value = "15";
+    shiftForm.querySelectorAll("input[name=workDays]").forEach((input, index) => { input.checked = index < 5; });
+    if (businessId) shiftForm.querySelector("#shift-business").value = businessId;
   };
-  businessSelect.addEventListener("change", () => { businessId = businessSelect.value || null; loadShifts(); });
-  await loadShifts();
+  resetShiftForm();
 
-  overlay.querySelector("#shift-form").addEventListener("submit", async (event) => {
+  const hideScheduleEditor = () => {
+    editingScheduleId = null;
+    scheduleEditor.hidden = true;
+    scheduleIdInput.value = "";
+  };
+
+  const load = async () => {
+    try {
+      const [shifts, schedules, employees] = businessId
+        ? await Promise.all([
+            listShifts(organizationId, businessId),
+            listSchedules({ organizationId, businessId }),
+            listEmployeesForBusiness(organizationId, businessId),
+          ])
+        : [[], [], []];
+      currentShifts = shifts;
+      currentSchedules = schedules;
+      employeeNames = new Map(employees.map((employee) => [employee.id, employee.displayName || employee.email || "Tanpa nama"]));
+      count.textContent = currentShifts.length;
+      scheduleCount.textContent = currentSchedules.length;
+      list.innerHTML = currentShifts.length
+        ? currentShifts.map((shift) => `<div class="shift-row"><div><strong>${escapeHtml(shift.name)}</strong><span>${escapeHtml(shift.startTime)} – ${escapeHtml(shift.endTime)} · toleransi ${shift.toleranceMinutes || 0}m · istirahat ${shift.breakMinutes || 0}m</span></div><b>${shift.workDays?.length || 0} hari${shift.status === "inactive" ? " · nonaktif" : ""}</b><div class="shift-actions"><button class="secondary-button" type="button" data-shift-edit="${shift.id}">Edit</button><button class="reject-registration" type="button" data-shift-delete="${shift.id}">Hapus</button></div></div>`).join("")
+        : `<p class="shift-empty">Belum ada shift untuk bisnis ini.</p>`;
+      scheduleList.innerHTML = currentSchedules.length
+        ? [...currentSchedules].sort((a, b) => String(b.date).localeCompare(String(a.date))).map((schedule) => {
+            const shift = currentShifts.find((item) => item.id === schedule.shiftId);
+            const status = schedule.status || "active";
+            return `<div class="shift-row schedule-row"><div><strong>${escapeHtml(employeeNames.get(schedule.userId) || schedule.userId)}</strong><span>${escapeHtml(schedule.date)} · ${escapeHtml(shift?.name || "Shift tidak ditemukan")} · ${escapeHtml(shift ? `${shift.startTime}–${shift.endTime}` : "-")}</span></div><b>${status === "active" ? "Aktif" : "Dibatalkan"}</b><div class="shift-actions"><button class="secondary-button" type="button" data-schedule-edit="${schedule.id}">Edit</button><button class="reject-registration" type="button" data-schedule-delete="${schedule.id}">Hapus</button></div></div>`;
+          }).join("")
+        : `<p class="shift-empty">Belum ada jadwal untuk bisnis ini.</p>`;
+      shiftSelect.innerHTML = shiftOptions();
+      scheduleEditShift.innerHTML = shiftOptions();
+      if (editingScheduleId && currentSchedules.some((item) => item.id === editingScheduleId)) {
+        const schedule = currentSchedules.find((item) => item.id === editingScheduleId);
+        scheduleEditShift.value = schedule.shiftId;
+        scheduleEditDate.value = schedule.date;
+        scheduleEditEffective.value = schedule.effectiveFrom || schedule.date;
+        scheduleEditStatus.value = schedule.status || "active";
+      }
+      employeeList.innerHTML = employees.length
+        ? employees.map((employee) => `<label class="task-assignee-option"><input type="checkbox" value="${employee.id}" data-assign-employee="${employee.id}" /><span>${escapeHtml(employee.displayName || employee.email || "Tanpa nama")}</span></label>`).join("")
+        : `<p class="task-empty">Belum ada karyawan pada bisnis ini.</p>`;
+    } catch (error) {
+      list.innerHTML = `<p class="shift-error">${escapeHtml(error.message)}</p>`;
+    }
+  };
+
+  businessSelect.addEventListener("change", () => {
+    businessId = businessSelect.value || null;
+    resetShiftForm();
+    hideScheduleEditor();
+    load();
+  });
+  shiftCancel.addEventListener("click", resetShiftForm);
+  overlay.querySelector("[data-schedule-cancel]").addEventListener("click", hideScheduleEditor);
+  await load();
+
+  shiftForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = Object.fromEntries(new FormData(form));
-    data.workDays = [...form.querySelectorAll("input[name=workDays]:checked")].map((input) => input.value);
-    const error = form.querySelector(".schedule-error");
+    const data = Object.fromEntries(new FormData(shiftForm));
+    data.workDays = [...shiftForm.querySelectorAll("input[name=workDays]:checked")].map((input) => input.value);
+    const error = shiftForm.querySelector(".schedule-error");
+    const restore = setBusy(shiftSubmit, editingShiftId ? "Menyimpan perubahan..." : "Menyimpan shift...");
+    error.textContent = "";
     try {
       if (!businessId) throw new Error("Pilih bisnis terlebih dahulu.");
-      const shift = await addShift({ ...data, organizationId, businessId });
-      logAuditSafe({ profile, action: "shift_created", targetType: "shift", targetId: shift?.id || null, businessId, metadata: { name: data.name, startTime: data.startTime, endTime: data.endTime } });
-      notifySafe({ type: NOTIFICATION_TYPES.scheduleAssigned, title: "Jadwal/shift baru", body: `${data.name} · ${data.startTime}–${data.endTime}`, organizationId, businessId, targetType: "shift", targetId: shift?.id || null, audience: "owner" });
-      form.reset();
-      form.querySelector("#shift-start").value = "08:00";
-      form.querySelector("#shift-end").value = "17:00";
-      form.querySelectorAll("input[name=workDays]").forEach((input, index) => { input.checked = index < 5; });
-      error.textContent = "";
-      await loadShifts();
+      if (editingShiftId) {
+        await updateShiftAssignment({ organizationId, businessId, shiftId: editingShiftId, fields: data });
+        logAuditSafe({ profile, action: "shift_updated", targetType: "shift", targetId: editingShiftId, businessId, metadata: { name: data.name } });
+        shiftForm.querySelector(".schedule-message")?.replaceChildren();
+      } else {
+        const shift = await addShift({ ...data, organizationId, businessId });
+        logAuditSafe({ profile, action: "shift_created", targetType: "shift", targetId: shift?.id || null, businessId, metadata: { name: data.name, startTime: data.startTime, endTime: data.endTime } });
+        notifySafe({ type: NOTIFICATION_TYPES.scheduleAssigned, title: "Jadwal/shift baru", body: `${data.name} · ${data.startTime}–${data.endTime}`, organizationId, businessId, targetType: "shift", targetId: shift?.id || null, audience: "owner" });
+      }
+      resetShiftForm();
+      await load();
     } catch (submissionError) { error.textContent = submissionError.message; }
+    finally { restore(); }
+  });
+
+  list.addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-shift-edit]");
+    const deleteButton = event.target.closest("[data-shift-delete]");
+    if (editButton) {
+      const shift = currentShifts.find((item) => item.id === editButton.dataset.shiftEdit);
+      if (!shift) return;
+      editingShiftId = shift.id;
+      shiftIdInput.value = shift.id;
+      shiftTitle.textContent = "Ubah shift";
+      shiftSubmit.innerHTML = `Simpan perubahan <span>→</span>`;
+      shiftCancel.hidden = false;
+      shiftForm.querySelector("#shift-name").value = shift.name;
+      shiftForm.querySelector("#shift-business").value = businessId;
+      shiftForm.querySelector("#shift-start").value = shift.startTime;
+      shiftForm.querySelector("#shift-end").value = shift.endTime;
+      shiftForm.querySelector("#shift-break").value = shift.breakMinutes || 0;
+      shiftForm.querySelector("#shift-tolerance").value = shift.toleranceMinutes || 0;
+      shiftForm.querySelectorAll("input[name=workDays]").forEach((input) => { input.checked = (shift.workDays || []).includes(input.value); });
+      shiftForm.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (deleteButton) {
+      if (!window.confirm("Hapus shift ini?")) return;
+      const restore = setBusy(deleteButton, "Menghapus...");
+      try {
+        await deleteShiftAssignment({ organizationId, businessId, shiftId: deleteButton.dataset.shiftDelete });
+        logAuditSafe({ profile, action: "shift_deleted", targetType: "shift", targetId: deleteButton.dataset.shiftDelete, businessId });
+        if (editingShiftId === deleteButton.dataset.shiftDelete) resetShiftForm();
+        await load();
+      } catch (deleteError) { overlay.querySelector("#shift-form .schedule-error").textContent = deleteError.message; }
+      finally { restore(); }
+    }
   });
 
   overlay.querySelector("#assignment-form").addEventListener("submit", async (event) => {
@@ -115,20 +252,74 @@ export async function openScheduleManager({ profile, onClose }) {
       error.textContent = "Pilih minimal satu karyawan, shift, tanggal, dan tanggal efektif.";
       return;
     }
-    const submit = form.querySelector("button[type=submit]");
-    submit.disabled = true;
+    const restore = setBusy(form.querySelector("button[type=submit]"), "Menetapkan jadwal...");
     try {
       const result = await assignShiftBulk({ organizationId, businessId, userIds, shiftId, date: dateInput.value, effectiveFrom: effectiveInput.value, assignedBy: profile.uid });
-      const names = new Map([...employeeList.querySelectorAll("[data-assign-employee]")].map((input) => [input.value, input.parentElement.textContent.trim()]));
       result.created.forEach((schedule) => logAuditSafe({ profile, action: "schedule_assigned", targetType: "schedule", targetId: schedule.id, businessId, metadata: { userId: schedule.userId, shiftId, date: schedule.date, effectiveFrom: schedule.effectiveFrom, batchId: result.batchId } }));
       if (result.created.length) {
         notifySafe({ id: `schedule_bulk_${result.batchId}`, type: NOTIFICATION_TYPES.scheduleAssigned, title: "Jadwal kerja ditetapkan", body: `${dateInput.value} · berlaku sejak ${effectiveInput.value}`, organizationId, businessId, targetType: "schedule", targetId: result.created[0].id, userIds: result.created.map((schedule) => schedule.userId) });
       }
-      const skipped = result.skipped.map((item) => `${names.get(item.userId) || item.userId}: ${item.reason}`).join(" · ");
+      const skipped = result.skipped.map((item) => `${employeeNames.get(item.userId) || item.userId}: ${item.reason}`).join(" · ");
       message.textContent = `${result.created.length} jadwal ditetapkan.${skipped ? ` Dilewati: ${skipped}` : ""}`;
       error.textContent = "";
       employeeList.querySelectorAll("[data-assign-employee]").forEach((input) => { input.checked = false; });
+      await load();
     } catch (assignmentError) { error.textContent = assignmentError.message; }
-    submit.disabled = false;
+    finally { restore(); }
+  });
+
+  scheduleEditor.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!editingScheduleId) return;
+    const error = scheduleEditor.querySelector(".schedule-error");
+    const restore = setBusy(scheduleEditor.querySelector("button[type=submit]"), "Menyimpan perubahan...");
+    error.textContent = "";
+    try {
+      await updateScheduleAssignment({
+        organizationId,
+        businessId,
+        scheduleId: editingScheduleId,
+        fields: {
+          shiftId: scheduleEditShift.value,
+          date: scheduleEditDate.value,
+          effectiveFrom: scheduleEditEffective.value,
+          status: scheduleEditStatus.value,
+        },
+      });
+      logAuditSafe({ profile, action: "schedule_updated", targetType: "schedule", targetId: editingScheduleId, businessId });
+      scheduleEditor.querySelector(".schedule-message").textContent = "Jadwal diperbarui.";
+      hideScheduleEditor();
+      await load();
+    } catch (updateError) { error.textContent = updateError.message; }
+    finally { restore(); }
+  });
+
+  scheduleList.addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-schedule-edit]");
+    const deleteButton = event.target.closest("[data-schedule-delete]");
+    if (editButton) {
+      const schedule = currentSchedules.find((item) => item.id === editButton.dataset.scheduleEdit);
+      if (!schedule) return;
+      editingScheduleId = schedule.id;
+      scheduleIdInput.value = schedule.id;
+      scheduleEditShift.value = schedule.shiftId;
+      scheduleEditDate.value = schedule.date;
+      scheduleEditEffective.value = schedule.effectiveFrom || schedule.date;
+      scheduleEditStatus.value = schedule.status || "active";
+      scheduleEditor.hidden = false;
+      scheduleEditor.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (deleteButton) {
+      if (!window.confirm("Hapus jadwal ini?")) return;
+      const restore = setBusy(deleteButton, "Menghapus...");
+      try {
+        await deleteScheduleAssignment({ organizationId, businessId, scheduleId: deleteButton.dataset.scheduleDelete });
+        logAuditSafe({ profile, action: "schedule_deleted", targetType: "schedule", targetId: deleteButton.dataset.scheduleDelete, businessId });
+        if (editingScheduleId === deleteButton.dataset.scheduleDelete) hideScheduleEditor();
+        await load();
+      } catch (deleteError) { scheduleEditor.querySelector(".schedule-error").textContent = deleteError.message; }
+      finally { restore(); }
+    }
   });
 }

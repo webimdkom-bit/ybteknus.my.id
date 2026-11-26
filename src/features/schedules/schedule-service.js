@@ -1,10 +1,15 @@
 import {
   createSchedulesBatch,
   createShift,
+  deleteSchedule,
+  deleteShift,
+  getSchedule,
   getShift,
   listEmployeesForBusiness,
   listSchedules,
   listShifts,
+  updateSchedule,
+  updateShift,
 } from "../../lib/firestore/repositories.js";
 import { calculateAttendanceTiming, getAttendanceStatus, isScheduleEffective, toMinutes } from "./schedule-calculations.js";
 
@@ -38,9 +43,10 @@ export async function assignShiftBulk({ organizationId, businessId, userIds, shi
     throw new Error("Bisnis, karyawan, shift, dan tanggal wajib diisi.");
   }
   if (uniqueIds.length > 100) throw new Error("Maksimal 100 karyawan per penetapan jadwal.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || (effectiveFrom && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom))) {
+  if (!isValidDateKey(date) || (effectiveFrom && !isValidDateKey(effectiveFrom))) {
     throw new Error("Format tanggal harus YYYY-MM-DD.");
   }
+  if (effectiveFrom && effectiveFrom > date) throw new Error("Tanggal efektif tidak boleh setelah tanggal jadwal.");
 
   const shift = await getShift(shiftId);
   if (!shift || shift.status === "inactive" || shift.organizationId !== organizationId || shift.businessId !== businessId) {
@@ -81,6 +87,64 @@ export async function assignShift({ organizationId, businessId, userId, shiftId,
     throw new Error(reason);
   }
   return result.created[0];
+}
+
+export async function updateShiftAssignment({ organizationId, businessId, shiftId, fields }) {
+  const shift = await getShift(shiftId);
+  if (!shift || shift.organizationId !== organizationId || shift.businessId !== businessId) throw new Error("Shift tidak ditemukan.");
+  const next = {
+    name: fields.name ?? shift.name,
+    startTime: fields.startTime ?? shift.startTime,
+    endTime: fields.endTime ?? shift.endTime,
+    breakMinutes: fields.breakMinutes ?? shift.breakMinutes ?? 0,
+    toleranceMinutes: fields.toleranceMinutes ?? shift.toleranceMinutes ?? 0,
+    workDays: fields.workDays ?? shift.workDays ?? WEEKDAYS.slice(0, 5),
+  };
+  validateShift(next);
+  return updateShift(shiftId, next);
+}
+
+export async function deleteShiftAssignment({ organizationId, businessId, shiftId }) {
+  const shift = await getShift(shiftId);
+  if (!shift || shift.organizationId !== organizationId || shift.businessId !== businessId) throw new Error("Shift tidak ditemukan.");
+  const schedules = await listSchedules({ organizationId, businessId });
+  if (schedules.some((schedule) => schedule.shiftId === shiftId && schedule.status !== "cancelled")) {
+    throw new Error("Shift masih dipakai jadwal aktif. Batalkan atau hapus jadwal tersebut terlebih dahulu.");
+  }
+  await deleteShift(shiftId);
+}
+
+export async function updateScheduleAssignment({ organizationId, businessId, scheduleId, fields }) {
+  const schedule = await getSchedule(scheduleId);
+  if (!schedule || schedule.organizationId !== organizationId || schedule.businessId !== businessId) throw new Error("Jadwal tidak ditemukan.");
+  const date = fields.date ?? schedule.date;
+  const effectiveFrom = fields.effectiveFrom ?? schedule.effectiveFrom ?? date;
+  const shiftId = fields.shiftId ?? schedule.shiftId;
+  const status = fields.status ?? schedule.status ?? "active";
+  if (!isValidDateKey(date) || !isValidDateKey(effectiveFrom)) throw new Error("Format tanggal harus YYYY-MM-DD.");
+  if (effectiveFrom > date) throw new Error("Tanggal efektif tidak boleh setelah tanggal jadwal.");
+  if (!["active", "cancelled"].includes(status)) throw new Error("Status jadwal tidak valid.");
+  const shift = await getShift(shiftId);
+  if (!shift || shift.status === "inactive" || shift.organizationId !== organizationId || shift.businessId !== businessId) throw new Error("Shift tidak valid untuk bisnis ini.");
+  if (date !== schedule.date) {
+    const existing = await listSchedules({ organizationId, businessId, from: date, to: date });
+    if (existing.some((item) => item.userId === schedule.userId && item.id !== scheduleId && item.status !== "cancelled")) {
+      throw new Error("Karyawan sudah memiliki jadwal aktif pada tanggal ini.");
+    }
+  }
+  return updateSchedule(scheduleId, { date, effectiveFrom, shiftId, status });
+}
+
+export async function deleteScheduleAssignment({ organizationId, businessId, scheduleId }) {
+  const schedule = await getSchedule(scheduleId);
+  if (!schedule || schedule.organizationId !== organizationId || schedule.businessId !== businessId) throw new Error("Jadwal tidak ditemukan.");
+  await deleteSchedule(scheduleId);
+}
+
+export function isValidDateKey(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 export { calculateAttendanceTiming, getAttendanceStatus, listSchedules, listShifts };

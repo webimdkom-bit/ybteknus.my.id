@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { isScheduleEffective, pickActiveSchedule } from "../../src/features/schedules/schedule-calculations.js";
+import { isValidDateKey } from "../../src/features/schedules/schedule-service.js";
 
 const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 const service = read("../../src/features/schedules/schedule-service.js");
@@ -49,5 +50,30 @@ describe("bulk schedule assignment wiring", () => {
 
   it("uses deterministic notifications", () => {
     expect(view).toContain("id: `schedule_bulk_${result.batchId}`");
+  });
+
+  it("validates real calendar dates and effective dates", () => {
+    expect(isValidDateKey("2026-11-26")).toBe(true);
+    expect(isValidDateKey("2026-13-99")).toBe(false);
+    expect(service).toContain("Tanggal efektif tidak boleh setelah tanggal jadwal.");
+  });
+
+  it("supports editing and deleting shifts and schedules", () => {
+    expect(service).toContain("updateShiftAssignment(");
+    expect(service).toContain("deleteShiftAssignment(");
+    expect(service).toContain("updateScheduleAssignment(");
+    expect(service).toContain("deleteScheduleAssignment(");
+    expect(repositories).toContain("export async function updateShift(");
+    expect(repositories).toContain("export async function deleteShift(");
+    expect(repositories).toContain("export async function updateSchedule(");
+    expect(repositories).toContain("export async function deleteSchedule(");
+    expect(view).toContain("data-shift-edit=");
+    expect(view).toContain("data-schedule-edit=");
+    expect(view).toContain("Jadwal karyawan");
+  });
+
+  it("auto-selects an available business for owners and admins", () => {
+    expect(view).toContain("profile.selectedBusinessId || profile.businessIds?.[0] || null");
+    expect(view).toContain("visibleBusinesses[0]?.id");
   });
 });

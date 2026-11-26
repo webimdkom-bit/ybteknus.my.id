@@ -325,6 +325,19 @@ body { min-width: 0; }
   .report-summary-row summary span:nth-child(2) { grid-column: 1 / -1; }
   .report-employee-summary-head { flex-direction: column; gap: 4px; }
 }
+.schedule-list-head { margin-top: 22px; }
+.schedule-count { background: #e7f0f4; color: #5e8297; padding: 3px 7px; font-size: 9px; }
+.shift-actions { display: flex; align-items: center; gap: 6px; }
+.shift-actions button { padding: 7px 9px; font-size: 9px; white-space: nowrap; }
+.shift-actions .secondary-button { background: #e7ece5; color: #5d6b69; }
+.schedule-row { align-items: flex-start; }
+.schedule-edit-form[hidden] { display: none; }
+.shift-form-actions { display: flex; gap: 8px; align-items: stretch; }
+.shift-form-actions .primary-button { flex: 1; width: auto; }
+.shift-form-actions .secondary-button { width: auto; white-space: nowrap; padding: 11px; font-size: 10px; }
 @media (max-width: 720px) {
   .sidebar-profile .icon-button { width: 44px; height: 44px; }
+  .shift-actions { flex-wrap: wrap; }
+  .shift-actions button { min-height: 44px; flex: 1 1 auto; }
+  .shift-form-actions { flex-direction: column; }
 }

@@ -18,7 +18,7 @@ const ALLOWED_ACTIONS = new Set([
   "admin_created", "admin_access_changed", "admin_deactivated", "admin_activated",
   "business_created", "business_updated", "business_registration_toggled", "business_location_changed",
   "employee_transferred",
-  "shift_created", "schedule_assigned",
+  "shift_created", "shift_updated", "shift_deleted", "schedule_assigned", "schedule_updated", "schedule_deleted",
   "request_submitted", "request_approved", "request_rejected",
   "attendance_corrected", "attendance_recorded", "overtime_reviewed",
 ]);

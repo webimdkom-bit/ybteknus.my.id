@@ -335,6 +335,15 @@ export async function listShifts(organizationId, businessId = null) {
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
+export async function updateShift(shiftId, changes) {
+  await updateDoc(doc(db, COLLECTIONS.SHIFTS, shiftId), { ...changes, updatedAt: serverTimestamp() });
+  return { id: shiftId, ...changes };
+}
+
+export async function deleteShift(shiftId) {
+  await deleteDoc(doc(db, COLLECTIONS.SHIFTS, shiftId));
+}
+
 export async function getShift(shiftId) {
   const snapshot = await getDoc(doc(db, COLLECTIONS.SHIFTS, shiftId));
   return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
@@ -387,6 +396,20 @@ export async function listSchedules({ organizationId, businessId, userId, from, 
   if (to) constraints.push(where("date", "<=", to));
   const result = await getDocs(query(collection(db, COLLECTIONS.SCHEDULES), ...constraints));
   return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function getSchedule(scheduleId) {
+  const snapshot = await getDoc(doc(db, COLLECTIONS.SCHEDULES, scheduleId));
+  return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+}
+
+export async function updateSchedule(scheduleId, changes) {
+  await updateDoc(doc(db, COLLECTIONS.SCHEDULES, scheduleId), { ...changes, updatedAt: serverTimestamp() });
+  return { id: scheduleId, ...changes };
+}
+
+export async function deleteSchedule(scheduleId) {
+  await deleteDoc(doc(db, COLLECTIONS.SCHEDULES, scheduleId));
 }
 
 export async function listEmployeeSchedules(userId) {
