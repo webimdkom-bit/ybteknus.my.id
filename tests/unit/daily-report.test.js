@@ -87,6 +87,10 @@ describe("daily report wiring", () => {
     expect(dailyView).toContain("data-daily-review");
   });
 
+  it("binds both daily report review buttons", () => {
+    expect(dailyView).toContain('body.querySelectorAll("[data-daily-review]")');
+  });
+
   it("reuses file-upload endpoint for daily report attachments", () => {
     expect(fileUploadApi).toContain('body.reportId');
     expect(fileUploadApi).toContain('db.collection("dailyReports")');

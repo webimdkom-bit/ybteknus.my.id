@@ -188,8 +188,8 @@ async function renderOwnerMode(body, profile) {
       error = "";
       render();
     }));
-    body.querySelector("[data-daily-review]")?.addEventListener("click", async () => {
-      const action = body.querySelector("[data-daily-review]").dataset.dailyReview;
+    body.querySelectorAll("[data-daily-review]").forEach((button) => button.addEventListener("click", async () => {
+      const action = button.dataset.dailyReview;
       const reviewNote = action === "revision" ? window.prompt("Catatan revisi:", "") || "" : "";
       const reviewedAt = getJakartaISO();
       await reviewDailyReport(selected.id, { status: action === "revision" ? DAILY_REPORT_STATUS.REVISION : DAILY_REPORT_STATUS.REVIEWED, reviewedBy: profile.uid, reviewedAt, reviewNote });
@@ -197,7 +197,7 @@ async function renderOwnerMode(body, profile) {
       notifySafe({ id: `daily_report_${action}_${selected.id}_${reviewedAt}`, type: action === "revision" ? NOTIFICATION_TYPES.dailyReportRevisionRequested : NOTIFICATION_TYPES.dailyReportReviewed, title: action === "revision" ? "Laporan harian perlu revisi" : "Laporan harian ditinjau", body: reviewNote || reportDate, organizationId: profile.organizationId, businessId: selected.businessIds?.[0] || null, targetType: "dailyReport", targetId: selected.id, userIds: [selected.userId] });
       message = action === "revision" ? "Permintaan revisi dikirim." : "Laporan ditandai ditinjau.";
       await reload();
-    });
+    }));
     body.querySelectorAll("[data-daily-file-open]").forEach((button) => button.addEventListener("click", async () => {
       try {
         const result = await requestFileAccess(button.dataset.dailyFileOpen);
