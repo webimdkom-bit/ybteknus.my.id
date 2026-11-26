@@ -20,6 +20,7 @@ import { openReportViewer } from "./features/reports/report-view.js";
 import { openDailyReportViewer } from "./features/reports/daily-report-view.js";
 import { initNotificationBadges, stopNotificationBadges } from "./features/notifications/notification-view.js";
 import { openProfileEditor } from "./features/employees/profile-editor.js";
+import { profileAvatarContent, profileAvatarMarkup, profileIdentityMarkup, profileInitials, profileRoleLabel } from "./features/users/profile-identity.js";
 import { openFileManager } from "./features/files/file-view.js";
 import { switchOrganization } from "./features/organization/organization-service.js";
 import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
@@ -44,24 +45,15 @@ let dashboardViewModel = null;
 let activityFilter = "all";
 
 function renderDashboard(profile) {
-  if (profile?.role === "employee") {
-    renderEmployeeDashboard(profile);
-    return;
-  }
-  if (profile?.role === "admin") {
-    renderAdminDashboard(profile);
-    return;
-  }
-  if (profile?.role !== "owner") {
-    renderUnknownRoleState(profile);
-    return;
-  }
-  renderOwnerDashboard(profile);
+  if (profile?.role === "employee") renderEmployeeDashboard(profile);
+  else if (profile?.role === "admin") renderAdminDashboard(profile);
+  else if (profile?.role !== "owner") renderUnknownRoleState(profile);
+  else renderOwnerDashboard(profile);
+  wireProfileAvatarFallback(profile);
 }
 
 function renderOwnerDashboard(profile) {
   const firstName = profile?.displayName?.split(" ")[0] || "there";
-  const roleLabel = profile?.role === "owner" ? "Owner" : profile?.role === "admin" ? "Admin" : "Employee";
   const roleView = {
     owner: { title: "Semua yang perlu Anda tahu", subtitle: "Semua yang perlu Anda tahu tentang seluruh operasional hari ini, dalam satu pandangan.", people: "PEOPLE AKTIF", peopleValue: "48", peopleFoot: "4 bisnis" },
     admin: { title: "Operasional bisnis Anda", subtitle: "Pantau people, jadwal, dan pekerjaan yang membutuhkan tindakan.", people: "PEOPLE DI BISNIS", peopleValue: "24", peopleFoot: "2 bisnis" },
@@ -70,14 +62,7 @@ function renderOwnerDashboard(profile) {
   app.innerHTML = `
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand-lockup">
-        <div class="brand-mark">YB</div>
-        <div>
-          <strong>YB TECH</strong>
-          <span>OPERATIONS OS</span>
-        </div>
-        <button class="icon-button sidebar-close" data-sidebar-close aria-label="Tutup menu"><i data-lucide="x"></i></button>
-      </div>
+      ${profileIdentityMarkup(profile)}
 
       <div class="workspace-select">
         <span>WORKSPACE</span>
@@ -105,8 +90,8 @@ function renderOwnerDashboard(profile) {
       <div class="sidebar-bottom">
         <a class="nav-item" href="#settings" data-open-location><i data-lucide="settings-2"></i><span>Lokasi & radius</span></a>
         <div class="profile-mini">
-          <div class="avatar">${initials(profile?.displayName)}</div>
-          <div><strong>${profile?.displayName || "User"}</strong><span>${roleLabel} · YB Tech</span></div>
+          ${profileAvatarMarkup(profile, "avatar")}
+          <div><strong data-profile-name>${profile?.displayName || "User"}</strong><span data-profile-role>${profileRoleLabel(profile)}</span></div>
           <button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button>
         </div>
       </div>
@@ -119,7 +104,7 @@ function renderOwnerDashboard(profile) {
         <div class="topbar-actions">
           <button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>Memuat tanggal...</span><i data-lucide="chevron-down"></i></button>
           <button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button>
-          <div class="avatar avatar-top">${initials(profile?.displayName)}</div>
+          ${profileAvatarMarkup(profile, "avatar avatar-top")}
         </div>
       </header>
 
@@ -185,6 +170,7 @@ function renderOwnerDashboard(profile) {
   `;
 
   renderDashboardIcons();
+  wireProfileEditor(profile);
   wireBusinessSwitcher(profile, () => refreshDashboard(profile));
   initNotificationBadges(profile);
   refreshDashboard(profile);
@@ -283,7 +269,7 @@ function renderAdminDashboard(profile) {
   app.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
-        <div class="brand-lockup"><div class="brand-mark">YB</div><div><strong>YB TECH</strong><span>OPERATIONS OS</span></div><button class="icon-button sidebar-close" data-sidebar-close aria-label="Tutup menu"><i data-lucide="x"></i></button></div>
+        ${profileIdentityMarkup(profile)}
         <div class="workspace-select"><span>WORKSPACE ADMIN</span><button class="business-switcher" type="button" data-business-switcher><span><i data-lucide="building-2"></i> <b data-business-switcher-label>Bisnis ditugaskan</b></span><i data-lucide="chevron-down"></i></button><div class="business-switcher-menu" data-business-switcher-menu hidden></div></div>
         <nav class="main-nav" aria-label="Navigasi admin">
           <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
@@ -296,9 +282,9 @@ function renderAdminDashboard(profile) {
           ${perms.length ? `<a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>07</b></a>` : ""}
           ${can("viewReports", "manageTasks") ? `<a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>08</b></a>` : ""}
         </nav>
-        <div class="sidebar-bottom"><div class="profile-mini"><div class="avatar">${initials(profile?.displayName)}</div><div><strong>${profile?.displayName || "User"}</strong><span>Admin · YB Tech</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
+        <div class="sidebar-bottom"><div class="profile-mini">${profileAvatarMarkup(profile, "avatar")}<div><strong data-profile-name>${profile?.displayName || "User"}</strong><span data-profile-role>${profileRoleLabel(profile)}</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
       </aside>
-      <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>Admin overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>Memuat tanggal...</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button><div class="avatar avatar-top">${initials(profile?.displayName)}</div></div></header>
+      <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>Admin overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>Memuat tanggal...</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button>${profileAvatarMarkup(profile, "avatar avatar-top")}</div></header>
         <main class="dashboard role-dashboard admin-dashboard" id="overview">
           <section class="hero-row"><div><p class="eyebrow">ADMIN OPERATIONS</p><h1>${getGreeting()},<br><em>${firstName}.</em></h1><p class="hero-copy">Pantau pekerjaan dan jadwal bisnis yang menjadi tanggung jawab Anda.</p></div>${can("manageSchedules") ? `<button class="primary-button" data-open-schedules><i data-lucide="calendar-days"></i> Kelola jadwal</button>` : ""}</section>
           <section class="metric-grid" aria-label="Ringkasan admin"><article class="metric-card metric-dark"><div class="metric-head"><span>KEHADIRAN HARI INI</span><i data-lucide="clock-3"></i></div><div class="metric-value" data-metric-attendance>—</div><div class="metric-foot"><span class="trend neutral" data-metric-attendance-foot>Bisnis Anda</span><span>data hari ini</span></div></article><article class="metric-card"><div class="metric-head"><span>PEOPLE DI BISNIS</span><i data-lucide="users"></i></div><div class="metric-value" data-metric-people>—</div><div class="metric-foot"><span class="trend neutral" data-metric-people-foot>Terpantau</span><span>sesuai akses</span></div></article><article class="metric-card metric-lime"><div class="metric-head"><span>TUGAS BERJALAN</span><i data-lucide="clipboard-check"></i></div><div class="metric-value" data-metric-tasks>—</div><div class="metric-foot"><span class="trend dark-trend" data-metric-tasks-foot>Operasional</span><span>hari ini</span></div></article><article class="metric-card"><div class="metric-head"><span>PERLU AKSI</span><i data-lucide="alert-circle"></i></div><div class="metric-value" data-metric-reviews>—</div><div class="metric-foot"><span class="trend warning" data-metric-reviews-foot>Review</span><span>sesuai izin</span></div></article></section>
@@ -309,6 +295,7 @@ function renderAdminDashboard(profile) {
   `;
   renderDashboardIcons();
   wireDashboardChrome();
+  wireProfileEditor(profile);
   wireBusinessSwitcher(profile, () => refreshDashboard(profile));
   initNotificationBadges(profile);
   refreshDashboard(profile);
@@ -331,7 +318,7 @@ function renderEmployeeDashboard(profile) {
   app.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
-        <div class="brand-lockup"><div class="brand-mark">YB</div><div><strong>YB TECH</strong><span>OPERATIONS OS</span></div><button class="icon-button sidebar-close" data-sidebar-close aria-label="Tutup menu"><i data-lucide="x"></i></button></div>
+        ${profileIdentityMarkup(profile)}
         <div class="workspace-select"><span>MY WORKSPACE</span><div class="employee-business-label"><i data-lucide="building-2"></i> Bisnis saya</div></div>
         <nav class="main-nav" aria-label="Navigasi employee">
           <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
@@ -341,9 +328,9 @@ function renderEmployeeDashboard(profile) {
           <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas saya</span><b>05</b></a>
           <a class="nav-item" href="#daily-report" data-open-daily-report><i data-lucide="file-text"></i><span>Laporan harian</span><b>06</b></a>
         </nav>
-        <div class="sidebar-bottom"><div class="profile-mini"><div class="avatar">${initials(profile?.displayName)}</div><div><strong>${profile?.displayName || "User"}</strong><span>Employee · YB Tech</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
+        <div class="sidebar-bottom"><div class="profile-mini">${profileAvatarMarkup(profile, "avatar")}<div><strong data-profile-name>${profile?.displayName || "User"}</strong><span data-profile-role>${profileRoleLabel(profile)}</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
       </aside>
-      <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>My overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>${formatDateLabel(selectedDateKey)}</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button><div class="avatar avatar-top">${initials(profile?.displayName)}</div></div></header>
+      <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>My overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>${formatDateLabel(selectedDateKey)}</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button>${profileAvatarMarkup(profile, "avatar avatar-top")}</div></header>
         <main class="dashboard role-dashboard employee-dashboard" id="overview">
           <section class="hero-row"><div><p class="eyebrow">MY WORKDAY</p><h1>${getGreeting()},<br><em>${firstName}.</em></h1><p class="hero-copy">Lihat jadwal, absensi, dan tugas yang perlu Anda selesaikan hari ini.</p></div><button class="primary-button" data-open-attendance><i data-lucide="clock-3"></i> Buka absensi</button></section>
           <section class="employee-action-grid"><article class="employee-attendance-card metric-dark"><div><p class="eyebrow">ABSENSI HARI INI</p><h2 data-employee-attendance-status>Memuat status...</h2><p>Aktifkan GPS untuk melakukan check-in di lokasi bisnis.</p></div><button class="primary-button" data-open-attendance>Check-in sekarang <span>→</span></button></article><article class="panel employee-schedule-card" id="employee-schedule"><div class="panel-heading"><div><h2>Jadwal hari ini</h2><p>Shift dan jam kerja Anda</p></div><i data-lucide="calendar-days"></i></div><div class="role-empty-state" data-employee-schedule><strong>Memuat jadwal...</strong><span>Jadwal akan muncul setelah Owner atau Admin menetapkan shift.</span></div></article></section>
@@ -355,13 +342,13 @@ function renderEmployeeDashboard(profile) {
   `;
   renderDashboardIcons();
   wireDashboardChrome();
+  wireProfileEditor(profile);
   initNotificationBadges(profile);
   wireDateFilters(profile, () => loadEmployeeDashboardData(profile, selectedDateKey));
   document.querySelectorAll("[data-open-attendance]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openAttendancePanel({ profile }); }));
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
   document.querySelectorAll("[data-open-daily-report]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openDailyReportViewer({ profile }); }));
-  document.querySelector("[data-open-profile]")?.addEventListener("click", (event) => { event.preventDefault(); openProfileEditor(profile); });
   loadEmployeeDashboardData(profile);
 }
 
@@ -524,6 +511,29 @@ function wireDashboardChrome() {
   document.querySelector("[data-sign-out]")?.addEventListener("click", () => signOutUser());
 }
 
+function applyProfileIdentity(profile) {
+  document.querySelectorAll("[data-profile-name]").forEach((element) => { element.textContent = profile?.displayName || "User"; });
+  document.querySelectorAll("[data-profile-role]").forEach((element) => { element.textContent = profileRoleLabel(profile); });
+  document.querySelectorAll("[data-profile-avatar]").forEach((element) => {
+    element.innerHTML = profileAvatarContent(profile);
+  });
+  wireProfileAvatarFallback(profile);
+}
+
+function wireProfileAvatarFallback(profile) {
+  document.querySelectorAll("[data-profile-avatar] [data-profile-image]").forEach((image) => image.addEventListener("error", () => {
+    const holder = image.closest("[data-profile-avatar]");
+    if (holder) holder.textContent = profileInitials(profile?.displayName);
+  }, { once: true }));
+}
+
+function wireProfileEditor(profile) {
+  document.querySelectorAll("[data-open-profile]").forEach((button) => button.addEventListener("click", (event) => {
+    event.preventDefault();
+    openProfileEditor(profile, applyProfileIdentity);
+  }));
+}
+
 function renderDashboardIcons() {
   createIcons({ icons: { Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck, FolderOpen } });
 }
@@ -613,10 +623,6 @@ function renderPendingState(profile) {
 function renderInactiveState() {
   app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><div class="brand-mark">YB</div><p class="eyebrow">ACCESS REMOVED</p><h1>No longer<br><em>active.</em></h1><p>Akses Owner Anda sudah dinonaktifkan. Hubungi Owner aktif perusahaan jika ini tidak sesuai.</p><button class="primary-button" data-sign-out>Kembali ke login</button></section></main>`;
   app.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
-}
-
-function initials(name = "User") {
-  return name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
 subscribeToAuth(async (user) => {

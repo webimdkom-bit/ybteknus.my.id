@@ -1,12 +1,12 @@
 import { updateUserProfile } from "../../lib/firestore/repositories.js";
 import { requestProfileUploadSignature, uploadFileToCloudinary } from "../files/file-upload-service.js";
-import { escapeHtml, setBusy, updateBusyLabel } from "../../lib/utils/html.js";
+import { escapeHtml, safeUrl, setBusy, updateBusyLabel } from "../../lib/utils/html.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 
-export async function openProfileEditor(profile) {
+export async function openProfileEditor(profile, onSaved) {
   const overlay = document.createElement("div");
   overlay.className = "profile-overlay";
-  overlay.innerHTML = `<section class="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title"><div class="profile-modal-head"><div><p class="eyebrow">MY PROFILE</p><h2 id="profile-edit-title">Edit profil</h2></div><button class="icon-button profile-close" aria-label="Tutup">×</button></div><form class="profile-form"><div class="profile-photo-wrap"><div class="profile-photo">${profile.photoURL ? `<img src="${escapeHtml(profile.photoURL)}" alt="Foto profil" />` : escapeHtml((profile.displayName || "U").slice(0, 1))}</div><input type="file" accept="image/*" data-profile-photo hidden /><button class="secondary-button" type="button" data-profile-photo-button>Ganti foto</button></div><div class="field"><label for="profile-phone">Nomor telepon</label><input id="profile-phone" name="phone" value="${escapeHtml(profile.phone || "")}" /></div><div class="field"><label for="profile-position">Jabatan</label><input id="profile-position" name="position" value="${escapeHtml(profile.position || "")}" /></div><div class="field"><label for="profile-identity">Identitas karyawan</label><input id="profile-identity" name="identityNumber" value="${escapeHtml(profile.identityNumber || "")}" /></div><p class="profile-message" role="status"></p><p class="profile-error" role="alert"></p><button class="primary-button" type="submit">Simpan profil <span>→</span></button></form></section>`;
+  overlay.innerHTML = `<section class="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title"><div class="profile-modal-head"><div><p class="eyebrow">MY PROFILE</p><h2 id="profile-edit-title">Edit profil</h2></div><button class="icon-button profile-close" aria-label="Tutup">×</button></div><form class="profile-form"><div class="profile-photo-wrap"><div class="profile-photo">${safeUrl(profile.photoURL) ? `<img src="${safeUrl(profile.photoURL)}" alt="Foto profil" />` : escapeHtml((profile.displayName || "U").slice(0, 1))}</div><input type="file" accept="image/*" data-profile-photo hidden /><button class="secondary-button" type="button" data-profile-photo-button>Ganti foto</button></div><div class="field"><label for="profile-phone">Nomor telepon</label><input id="profile-phone" name="phone" value="${escapeHtml(profile.phone || "")}" /></div><div class="field"><label for="profile-position">Jabatan</label><input id="profile-position" name="position" value="${escapeHtml(profile.position || "")}" /></div><div class="field"><label for="profile-identity">Identitas karyawan</label><input id="profile-identity" name="identityNumber" value="${escapeHtml(profile.identityNumber || "")}" /></div><p class="profile-message" role="status"></p><p class="profile-error" role="alert"></p><button class="primary-button" type="submit">Simpan profil <span>→</span></button></form></section>`;
   document.body.append(overlay);
   const close = () => overlay.remove();
   overlay.querySelector(".profile-close").addEventListener("click", close);
@@ -37,7 +37,7 @@ export async function openProfileEditor(profile) {
         onProgress: (progress) => updateBusyLabel(photoButton, `Mengunggah ${progress}%`),
       });
       photoURL = uploaded.secure_url;
-      overlay.querySelector(".profile-photo").innerHTML = `<img src="${escapeHtml(photoURL)}" alt="Foto profil" />`;
+      overlay.querySelector(".profile-photo").innerHTML = `<img src="${safeUrl(photoURL)}" alt="Foto profil" />`;
       messageElement.textContent = "Foto berhasil diunggah. Simpan untuk menerapkan.";
     } catch (error) {
       errorElement.textContent = error.message;
@@ -65,6 +65,7 @@ export async function openProfileEditor(profile) {
       logAuditSafe({ profile, action: "account_status_changed", targetType: "user", targetId: profile.uid, metadata: { field: "profile_updated" } });
       message.textContent = "Profil berhasil disimpan.";
       Object.assign(profile, { phone: data.phone.trim(), position: data.position.trim(), identityNumber: data.identityNumber.trim(), photoURL });
+      if (typeof onSaved === "function") onSaved(profile);
       setTimeout(close, 700);
     } catch (submitError) {
       error.textContent = submitError.message;

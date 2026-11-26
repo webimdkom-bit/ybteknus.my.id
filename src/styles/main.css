@@ -13,6 +13,16 @@ svg { width: 17px; height: 17px; stroke-width: 1.8; }
 .brand-mark { width: 35px; height: 35px; display: grid; place-items: center; border: 1px solid #bddc4a; color: #bddc4a; font-size: 12px; font-weight: 700; letter-spacing: -.08em; }
 .brand-lockup strong { display: block; font-size: 13px; letter-spacing: .13em; line-height: 1; }
 .brand-lockup span { display: block; color: #839093; font-size: 8px; font-weight: 600; letter-spacing: .16em; margin-top: 5px; }
+.sidebar-profile { display: flex; align-items: center; gap: 10px; padding: 0 6px 30px; }
+.profile-avatar { display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sidebar-profile .profile-avatar { width: 38px; height: 38px; border-radius: 50%; background: #d6e6ac; color: #293522; font-size: 11px; font-weight: 700; }
+.sidebar-profile-copy { flex: 1; min-width: 0; }
+.sidebar-profile-copy strong, .sidebar-profile-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-profile-copy strong { color: #f4f6f1; font-size: 12px; }
+.sidebar-profile-copy span { color: #bddc4a; font-size: 9px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; margin-top: 4px; }
+.sidebar-profile .icon-button { color: #839093; }
+.profile-edit-button { margin-left: auto; }
 .workspace-select { border-top: 1px solid #344144; border-bottom: 1px solid #344144; padding: 17px 12px 16px; }
 .workspace-select > span, .eyebrow, .quick-label { color: #8b999b; font-size: 9px; font-weight: 600; letter-spacing: .16em; }
 .business-switcher { width: 100%; background: transparent; color: #f4f6f1; display: flex; align-items: center; justify-content: space-between; padding: 14px 0 0; font-size: 12px; }
@@ -314,4 +324,7 @@ body { min-width: 0; }
   .report-summary-row summary { grid-template-columns: 1fr auto; gap: 4px 8px; }
   .report-summary-row summary span:nth-child(2) { grid-column: 1 / -1; }
   .report-employee-summary-head { flex-direction: column; gap: 4px; }
+}
+@media (max-width: 720px) {
+  .sidebar-profile .icon-button { width: 44px; height: 44px; }
 }
