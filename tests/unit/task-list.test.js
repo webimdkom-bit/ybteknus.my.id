@@ -45,6 +45,7 @@ describe("task list wiring", () => {
   });
 
   it("loads task reports for employee views", () => {
+    expect(view).toMatch(/import[\s\S]*listTaskReportsForUser[\s\S]*from "\.\.\/\.\.\/lib\/firestore\/repositories\.js"/);
     expect(view).toContain("listTaskReportsForUser(profile.uid)");
     expect(view).toContain("listTaskReportsForUser(context.assigneeId)");
   });

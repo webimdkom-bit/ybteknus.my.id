@@ -10,6 +10,7 @@ import {
   listTasksForUser,
   listTaskReportsForBusiness,
   listTaskReportsForOrganization,
+  listTaskReportsForUser,
   listTaskCategories,
   createTaskCategory,
   watchTasksForUser,
