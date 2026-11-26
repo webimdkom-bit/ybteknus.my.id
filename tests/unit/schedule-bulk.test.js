@@ -1,13 +1,15 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { dateSpanDays, eachScheduleDate, isScheduleEffective, pickActiveSchedule, weekdayKey } from "../../src/features/schedules/schedule-calculations.js";
+import { dateSpanDays, eachScheduleDate, groupEmployeeSchedules, isScheduleEffective, pickActiveSchedule, weekdayKey } from "../../src/features/schedules/schedule-calculations.js";
 import { isValidDateKey } from "../../src/features/schedules/schedule-service.js";
 
 const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 const service = read("../../src/features/schedules/schedule-service.js");
 const repositories = read("../../src/lib/firestore/repositories.js");
 const view = read("../../src/features/schedules/schedule-view.js");
+const employeeView = read("../../src/features/schedules/employee-schedule-view.js");
+const main = read("../../src/main.js");
 const audit = read("../../api/audit-log.js");
 
 describe("schedule effective helper", () => {
@@ -104,5 +106,33 @@ describe("bulk schedule assignment wiring", () => {
   it("auto-selects an available business for owners and admins", () => {
     expect(view).toContain("profile.selectedBusinessId || profile.businessIds?.[0] || null");
     expect(view).toContain("visibleBusinesses[0]?.id");
+  });
+});
+
+describe("employee schedule viewer", () => {
+  it("shows only active upcoming schedules grouped by month", () => {
+    const grouped = groupEmployeeSchedules({
+      from: "2026-11-26",
+      schedules: [
+        { id: "past", date: "2026-11-25", status: "active", effectiveFrom: "2026-11-01" },
+        { id: "cancelled", date: "2026-11-30", status: "cancelled", effectiveFrom: "2026-11-01" },
+        { id: "future-effective", date: "2026-12-01", status: "active", effectiveFrom: "2026-12-02" },
+        { id: "nov", date: "2026-11-30", status: "active", effectiveFrom: "2026-11-01" },
+        { id: "dec", date: "2026-12-01", status: "active", effectiveFrom: "2026-11-01" },
+      ],
+    });
+    expect(grouped.total).toBe(2);
+    expect(grouped.months).toHaveLength(2);
+    expect(grouped.months[0]).toMatchObject({ key: "2026-11", count: 1 });
+    expect(grouped.months[1]).toMatchObject({ key: "2026-12", count: 1 });
+  });
+
+  it("wires the Jadwal nav to a read-only modal", () => {
+    expect(main).toContain('data-open-employee-schedule');
+    expect(main).toContain('openEmployeeScheduleViewer({ profile })');
+    expect(employeeView).toContain("listEmployeeSchedules(profile.uid)");
+    expect(employeeView).toContain("groupEmployeeSchedules(");
+    expect(employeeView).not.toContain("data-schedule-edit=");
+    expect(employeeView).not.toContain("data-schedule-delete=");
   });
 });

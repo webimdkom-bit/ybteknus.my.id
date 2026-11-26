@@ -7,6 +7,7 @@ import "./lib/firebase/firebase.js";
 import { subscribeToAuth, signOutUser } from "./features/auth/auth-service.js";
 import { renderAuthScreen, stopBusinessWatcher } from "./features/auth/auth-view.js";
 import { openScheduleManager } from "./features/schedules/schedule-view.js";
+import { openEmployeeScheduleViewer } from "./features/schedules/employee-schedule-view.js";
 import { openAttendancePanel, openLocationSettings } from "./features/attendance/attendance-view.js";
 import { openBusinessManager } from "./features/businesses/business-view.js";
 import { openRegistrationManager } from "./features/users/registration-view.js";
@@ -323,7 +324,7 @@ function renderEmployeeDashboard(profile) {
         <nav class="main-nav" aria-label="Navigasi employee">
           <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
           <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi</span><b>02</b></a>
-          <a class="nav-item" href="#employee-schedule"><i data-lucide="calendar-days"></i><span>Jadwal</span><b>03</b></a>
+          <a class="nav-item" href="#employee-schedule" data-open-employee-schedule><i data-lucide="calendar-days"></i><span>Jadwal</span><b>03</b></a>
           <a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>04</b></a>
           <a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas saya</span><b>05</b></a>
           <a class="nav-item" href="#daily-report" data-open-daily-report><i data-lucide="file-text"></i><span>Laporan harian</span><b>06</b></a>
@@ -349,6 +350,7 @@ function renderEmployeeDashboard(profile) {
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
   document.querySelectorAll("[data-open-daily-report]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openDailyReportViewer({ profile }); }));
+  document.querySelector("[data-open-employee-schedule]")?.addEventListener("click", (event) => { event.preventDefault(); openEmployeeScheduleViewer({ profile }); });
   loadEmployeeDashboardData(profile);
 }
 

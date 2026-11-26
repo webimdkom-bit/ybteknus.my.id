@@ -57,6 +57,28 @@ export function eachScheduleDate({ from, to, weekdays = [], maxDays = 31 }) {
   return dates;
 }
 
+export function groupEmployeeSchedules({ schedules = [], from = "" } = {}) {
+  const visible = (schedules || [])
+    .filter((schedule) => schedule && schedule.status !== "cancelled" && (!from || String(schedule.date || "") >= from) && isScheduleEffective(schedule, schedule.date))
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  const months = new Map();
+  visible.forEach((schedule) => {
+    const key = String(schedule.date || "").slice(0, 7);
+    if (!key) return;
+    if (!months.has(key)) months.set(key, { key, schedules: [] });
+    months.get(key).schedules.push(schedule);
+  });
+  return {
+    total: visible.length,
+    months: [...months.values()].map((month) => ({
+      key: month.key,
+      label: new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month.key}-01T00:00:00Z`)),
+      count: month.schedules.length,
+      schedules: month.schedules,
+    })),
+  };
+}
+
 export function isScheduleEffective(schedule, date) {
   if (!schedule || schedule.status === "cancelled") return false;
   if (!date || !schedule.date || schedule.date !== date) return false;
