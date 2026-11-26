@@ -107,6 +107,7 @@ h1 em, .quick-panel em { color: #75931d; font-family: "Bebas Neue", sans-serif; 
 @keyframes yb-spin { to { transform: rotate(360deg); } }
 .is-busy, .list-loading { display: inline-flex; align-items: center; gap: 8px; }
 .is-busy { cursor: progress; opacity: .82; justify-content: center; }
+.primary-button.is-busy, .secondary-button.is-busy, .text-button.is-busy { justify-content: center; }
 .is-busy::before, .list-loading::before, .is-region-busy::before { content: ""; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: yb-spin .7s linear infinite; flex: 0 0 auto; }
 .list-loading { color: #899392; font-size: 10px; }
 .is-region-busy { position: relative; pointer-events: none; }
