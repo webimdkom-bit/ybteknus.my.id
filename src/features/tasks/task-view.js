@@ -234,13 +234,18 @@ async function loadTaskList(overlay, profile, canManage, max = 200, context = nu
         : profile.role === "owner"
           ? await listTasksForOrganization(profile.organizationId, max)
           : (await Promise.all((profile.businessIds || []).map((businessId) => listTasksForBusiness(profile.organizationId, businessId, max)))).flat();
-    let reports = context
-      ? await listTaskReportsForUser(context.assigneeId)
-      : profile.role === "owner"
-        ? await listTaskReportsForOrganization(profile.organizationId)
-        : profile.role === "admin"
-          ? (await Promise.all((profile.businessIds || []).map((businessId) => listTaskReportsForBusiness(profile.organizationId, businessId)))).flat()
-          : await listTaskReportsForUser(profile.uid);
+    let reports = [];
+    try {
+      reports = context
+        ? await listTaskReportsForUser(context.assigneeId)
+        : profile.role === "owner"
+          ? await listTaskReportsForOrganization(profile.organizationId)
+          : profile.role === "admin"
+            ? (await Promise.all((profile.businessIds || []).map((businessId) => listTaskReportsForBusiness(profile.organizationId, businessId)))).flat()
+            : await listTaskReportsForUser(profile.uid);
+    } catch (reportError) {
+      console.warn("[tasks] reports:", reportError?.message || reportError);
+    }
     if (context) {
       const ids = new Set(tasks.map((task) => task.id));
       reports = reports.filter((report) => ids.has(report.taskId));
@@ -249,6 +254,7 @@ async function loadTaskList(overlay, profile, canManage, max = 200, context = nu
     return { tasks, reports };
   } catch (error) {
     if (list) list.innerHTML = `<p class="task-error">${escapeHtml(error.message)}</p>`;
+    console.warn("[tasks] load:", error?.message || error);
     return { tasks: [], reports: [] };
   }
 }
