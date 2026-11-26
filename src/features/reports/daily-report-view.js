@@ -196,7 +196,11 @@ async function renderOwnerMode(body, profile) {
       logAuditSafe({ profile, action: action === "revision" ? "daily_report_revision_requested" : "daily_report_reviewed", targetType: "dailyReport", targetId: selected.id, metadata: { reportDate, reviewNote } });
       notifySafe({ id: `daily_report_${action}_${selected.id}_${reviewedAt}`, type: action === "revision" ? NOTIFICATION_TYPES.dailyReportRevisionRequested : NOTIFICATION_TYPES.dailyReportReviewed, title: action === "revision" ? "Laporan harian perlu revisi" : "Laporan harian ditinjau", body: reviewNote || reportDate, organizationId: profile.organizationId, businessId: selected.businessIds?.[0] || null, targetType: "dailyReport", targetId: selected.id, userIds: [selected.userId] });
       message = action === "revision" ? "Permintaan revisi dikirim." : "Laporan ditandai ditinjau.";
+      const selectedId = selected.id;
+      selected = null;
       await reload();
+      selected = reports.find((item) => item.id === selectedId) || selected || null;
+      render();
     }));
     body.querySelectorAll("[data-daily-file-open]").forEach((button) => button.addEventListener("click", async () => {
       try {
