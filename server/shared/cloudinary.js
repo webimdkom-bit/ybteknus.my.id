@@ -24,6 +24,7 @@ export async function generateUploadSignature({ publicId, folder, resourceType =
     publicId,
     folder,
     signature,
+    apiKey: process.env.CLOUDINARY_API_KEY,
     resourceType,
     uploadUrl: `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
   };

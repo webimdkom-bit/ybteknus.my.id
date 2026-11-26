@@ -5,6 +5,7 @@ import { isCloudinaryConfigured } from "../../server/shared/cloudinary.js";
 
 const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 const cloudinary = read("../../server/shared/cloudinary.js");
+const uploadService = read("../../src/features/files/file-upload-service.js");
 const upload = read("../../api/file-upload.js");
 const access = read("../../api/file-access.js");
 const remove = read("../../api/file-delete.js");
@@ -41,6 +42,11 @@ describe("Cloudinary wiring", () => {
     expect(upload).toContain("Cloudinary belum dikonfigurasi.");
     expect(access).toContain("Cloudinary belum dikonfigurasi.");
     expect(remove).toContain("Cloudinary belum dikonfigurasi.");
+  });
+
+  it("sends api_key for signed uploads", () => {
+    expect(cloudinary).toContain("apiKey: process.env.CLOUDINARY_API_KEY");
+    expect(uploadService).toContain('formData.append("api_key", signature.apiKey)');
   });
 });
 

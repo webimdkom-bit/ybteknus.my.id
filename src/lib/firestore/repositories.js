@@ -718,7 +718,7 @@ export async function getDailyReport(userId, reportDate) {
 export async function saveDailyReport({ profile, reportDate, report }) {
   const reference = doc(db, COLLECTIONS.DAILY_REPORTS, dailyReportKey(profile.uid, reportDate));
   const existing = await getDailyReport(profile.uid, reportDate);
-  const editable = { ...(report || {}) };
+  const editable = Object.fromEntries(Object.entries(report || {}).filter(([, value]) => value !== undefined));
   delete editable.id;
   delete editable.taskIds;
   const identity = existing ? {} : {
@@ -788,7 +788,6 @@ export async function syncDailyReportTask({ taskId, task = {}, userId = null, re
       archived: Boolean(task.archived),
       reportId: reportId || entries[index]?.reportId || null,
       reportStatus: reportStatus || entries[index]?.reportStatus || null,
-      updatedAt: serverTimestamp(),
     };
     if (index >= 0) entries[index] = { ...entries[index], ...patch };
     else entries.push({ taskId, title: task.title || "-", businessId: task.businessId || "", deadline: task.deadline || "", ...patch });

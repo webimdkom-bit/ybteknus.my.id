@@ -53,6 +53,7 @@ export async function uploadFileToCloudinary({ file, signature, folder, publicId
   formData.append("file", file);
   formData.append("signature", signature.signature);
   formData.append("timestamp", String(signature.timestamp));
+  if (signature.apiKey) formData.append("api_key", signature.apiKey);
   if (publicId) formData.append("public_id", publicId);
   if (folder) formData.append("folder", folder);
   const response = await fetch(signature.uploadUrl, { method: "POST", body: formData });

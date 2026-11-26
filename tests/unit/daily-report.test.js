@@ -51,6 +51,14 @@ describe("daily report wiring", () => {
     expect(repository).toContain("export async function updateTaskAndDailyReports(");
   });
 
+  it("keeps server timestamps out of task entry arrays", () => {
+    expect(repository).not.toMatch(/const patch = \{[\s\S]*?serverTimestamp\(\)[\s\S]*?\};/);
+  });
+
+  it("strips undefined fields before saving daily reports", () => {
+    expect(repository).toContain("value !== undefined");
+  });
+
   it("avoids denied getDoc on missing daily reports", () => {
     expect(repository).not.toContain('getDoc(doc(db, COLLECTIONS.DAILY_REPORTS');
     expect(repository).toContain('where("userId", "==", userId)');
