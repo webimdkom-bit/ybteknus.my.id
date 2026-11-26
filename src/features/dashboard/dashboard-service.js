@@ -18,6 +18,7 @@ import {
 import { formatInAppZone, getDateKey } from "../../lib/utils/time.js";
 import { isScheduleEffective } from "../schedules/schedule-calculations.js";
 import { isTaskOverdue } from "../tasks/task-status.js";
+import { canAny, canManageBusinessPermission, reviewableBusinessIds } from "../permissions/permission-service.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LATE_STATUSES = new Set(["terlambat", "terlambat dan pulang lebih awal"]);
@@ -261,18 +262,22 @@ export async function loadAdminDashboardData(profile, dateKey) {
   const memberships = await safeList(() => listMembershipsForUser(profile.uid, organizationId), "memberships");
   const permissionByBusiness = new Map(memberships.map((membership) => [membership.businessId, new Set(membership.permissions || [])]));
 
-  const fetchPerBusiness = (callback, label) => Promise.all(businessIds.map((businessId) => safeList(() => callback(businessId), `${label} ${businessId}`)));
+  const fetchPerBusiness = (callback, label, scopes = businessIds) => Promise.all(scopes.map((businessId) => safeList(() => callback(businessId), `${label} ${businessId}`)));
+  const employeeScopes = businessIds.filter((businessId) => canAny(profile, "manageEmployees", "manageTasks") || permissionByBusiness.get(businessId)?.has("manageEmployees"));
+  const requestScopes = businessIds.filter((businessId) => reviewableBusinessIds(profile).includes(businessId));
+  const taskScopes = businessIds.filter((businessId) => canManageBusinessPermission(profile, businessId, "manageTasks"));
+  const reportScopes = businessIds.filter((businessId) => canManageBusinessPermission(profile, businessId, "reviewSubmissions"));
 
   const [employeeGroups, attendanceTodayGroups, attendanceWeekGroups, schedulesTodayGroups, schedulesWeekGroups, registrationGroups, requestGroups, taskGroups, reportGroups] = await Promise.all([
-    fetchPerBusiness((businessId) => listEmployeesForBusiness(organizationId, businessId), "employees"),
+    fetchPerBusiness((businessId) => listEmployeesForBusiness(organizationId, businessId), "employees", employeeScopes),
     fetchPerBusiness((businessId) => listAttendanceForOrganization(organizationId, { businessId, date: today }), "attendance today"),
     fetchPerBusiness((businessId) => listAttendanceForOrganization(organizationId, { businessId, from, to: today }), "attendance week"),
     fetchPerBusiness((businessId) => listSchedules({ organizationId, businessId, from: today, to: today }), "schedules today"),
     fetchPerBusiness((businessId) => listSchedules({ organizationId, businessId, from, to: today }), "schedules week"),
     fetchPerBusiness((businessId) => listRegistrationsForBusiness(organizationId, businessId), "registrations"),
-    fetchPerBusiness((businessId) => listOperationalRequestsForBusiness(organizationId, businessId), "requests"),
-    fetchPerBusiness((businessId) => listTasksForBusiness(organizationId, businessId), "tasks"),
-    fetchPerBusiness((businessId) => listTaskReportsForBusiness(organizationId, businessId), "reports"),
+    fetchPerBusiness((businessId) => listOperationalRequestsForBusiness(organizationId, businessId), "requests", requestScopes),
+    fetchPerBusiness((businessId) => listTasksForBusiness(organizationId, businessId), "tasks", taskScopes),
+    fetchPerBusiness((businessId) => listTaskReportsForBusiness(organizationId, businessId), "reports", reportScopes),
   ]);
 
   const flatten = (groups) => groups.flat();
@@ -286,8 +291,7 @@ export async function loadAdminDashboardData(profile, dateKey) {
   let tasks = flatten(taskGroups);
   let reports = flatten(reportGroups);
 
-  if (![...permissionByBusiness.values()].some((permissions) => permissions.has("manageTasks"))) tasks = [];
-  if (![...permissionByBusiness.values()].some((permissions) => permissions.has("reviewSubmissions"))) reports = [];
+
 
   return buildViewModel({
     businesses,

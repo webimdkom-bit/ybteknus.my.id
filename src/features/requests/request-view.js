@@ -10,8 +10,9 @@ import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 import { applyAttendanceCorrection } from "../attendance-corrections/correction-service.js";
 import { listAttendanceCorrectionsForUser, createOvertime, listOvertimeForUser, updateOvertime } from "../../lib/firestore/repositories.js";
-import { escapeHtml } from "../../lib/utils/html.js";
+import { escapeHtml, setBusy } from "../../lib/utils/html.js";
 import { getJakartaISO } from "../../lib/utils/time.js";
+import { canReviewRequest, reviewableBusinessIds } from "../permissions/permission-service.js";
 
 const REQUEST_TYPES = Object.freeze([
   ["permission", "Izin"],
@@ -45,7 +46,7 @@ function employeeRequestMarkup() {
 }
 
 function reviewRequestMarkup(profile) {
-  return `<section class="request-modal" role="dialog" aria-modal="true" aria-labelledby="request-title"><div class="request-modal-head"><div><p class="eyebrow">REQUEST REVIEW</p><h2 id="request-title">Review pengajuan</h2><p>${profile.role === "owner" ? "Review seluruh pengajuan organization." : "Review pengajuan pada bisnis yang ditugaskan."}</p></div><button class="icon-button request-close" aria-label="Tutup">×</button></div><div class="request-list request-review-list"><p class="request-empty">Memuat pengajuan...</p></div></section>`;
+  return `<section class="request-modal" role="dialog" aria-modal="true" aria-labelledby="request-title"><div class="request-modal-head"><div><p class="eyebrow">REQUEST REVIEW</p><h2 id="request-title">Review pengajuan</h2><p>${profile.role === "owner" ? "Review seluruh pengajuan organization." : "Review pengajuan sesuai izin Anda."}</p></div><button class="icon-button request-close" aria-label="Tutup">×</button></div><p class="owner-form-message" data-request-review-message></p><div class="request-list request-review-list"><p class="request-empty">Memuat pengajuan...</p></div></section>`;
 }
 
 async function setupEmployeeRequests(overlay, profile) {
@@ -130,19 +131,25 @@ async function setupEmployeeRequests(overlay, profile) {
   });
 }
 
-async function setupRequestReview(overlay, profile) {
+async function setupRequestReview(overlay, profile, notice = "") {
   const list = overlay.querySelector(".request-review-list");
+  const message = overlay.querySelector("[data-request-review-message]");
+  if (message) message.textContent = notice;
   try {
+    const scopes = profile.role === "owner" ? (profile.businessIds || []) : reviewableBusinessIds(profile);
     const requests = profile.role === "owner"
       ? await listOperationalRequestsForOrganization(profile.organizationId)
-      : (await Promise.all((profile.businessIds || []).map((businessId) => listOperationalRequestsForBusiness(profile.organizationId, businessId)))).flat();
-    const pending = requests.filter((request) => request.status === "pending");
+      : scopes.length
+        ? (await Promise.all(scopes.map((businessId) => listOperationalRequestsForBusiness(profile.organizationId, businessId)))).flat()
+        : [];
+    const pending = requests.filter((request) => request.status === "pending" && canReviewRequest(profile, request));
     list.innerHTML = pending.length ? pending.map((request) => reviewRequestRow(request)).join("") : `<div class="request-empty-state"><strong>All clear.</strong><span>Tidak ada pengajuan yang menunggu review.</span></div>`;
     list.querySelectorAll("[data-request-action]").forEach((button) => button.addEventListener("click", async () => {
       const request = pending.find((item) => item.id === button.dataset.requestId);
       if (!request) return;
       const reviewNote = window.prompt("Catatan review (opsional):", "");
-      button.disabled = true;
+      const restore = setBusy(button, "Memproses...");
+      const sideEffectErrors = [];
       try {
         await reviewOperationalRequest(request.id, { status: button.dataset.requestAction, reviewedBy: profile.uid, reviewedAt: getJakartaISO(), reviewNote: reviewNote || "" });
         if (request.type === "attendance-correction" && button.dataset.requestAction === "approved") {
@@ -150,7 +157,7 @@ async function setupRequestReview(overlay, profile) {
             await applyAttendanceCorrection({ ...request, status: "approved" }, profile);
             logAuditSafe({ profile, action: "attendance_corrected", targetType: "attendance", targetId: request.id, businessId: request.businessId, metadata: { date: request.correctionDate, type: request.correctionType, requestedTime: request.requestedTime } });
           } catch (correctionError) {
-            console.warn("[requests] apply correction:", correctionError?.message || correctionError);
+            sideEffectErrors.push(`Koreksi absensi: ${correctionError?.message || correctionError}`);
           }
         }
         logAuditSafe({ profile, action: button.dataset.requestAction === "approved" ? "request_approved" : "request_rejected", targetType: "request", targetId: request.id, businessId: request.businessId, metadata: { type: request.type, reviewNote: reviewNote || "" } });
@@ -166,7 +173,7 @@ async function setupRequestReview(overlay, profile) {
               });
               logAuditSafe({ profile, action: "overtime_reviewed", targetType: "overtime", targetId: overtime.id, businessId: request.businessId, metadata: { status: button.dataset.requestAction, durationMinutes: overtime.durationMinutes } });
             }
-          } catch (overtimeError) { console.warn("[requests] overtime review:", overtimeError?.message || overtimeError); }
+          } catch (overtimeError) { sideEffectErrors.push(`Lembur: ${overtimeError?.message || overtimeError}`); }
         }
         notifySafe({
           type: button.dataset.requestAction === "approved" ? NOTIFICATION_TYPES.requestApproved : NOTIFICATION_TYPES.requestRejected,
@@ -178,8 +185,13 @@ async function setupRequestReview(overlay, profile) {
           targetId: request.id,
           userIds: [request.userId],
         });
-        await setupRequestReview(overlay, profile);
-      } catch (error) { button.closest(".request-row").querySelector(".request-error").textContent = error.message; button.disabled = false; }
+        await setupRequestReview(overlay, profile, sideEffectErrors.join(" · "));
+      } catch (error) {
+        const row = button.closest(".request-row");
+        const rowError = row?.querySelector(".request-error");
+        if (rowError) rowError.textContent = error.message;
+        if (message) message.textContent = error.message;
+      } finally { restore(); }
     }));
   } catch (error) { list.innerHTML = `<p class="request-error">${error.message}</p>`; }
 }

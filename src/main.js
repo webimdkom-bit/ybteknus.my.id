@@ -31,6 +31,7 @@ import { createOrganization, getBusiness, getOrganization, getShift, getUserProf
 import { formatInAppZone, getDateKey, getGreeting } from "./lib/utils/time.js";
 import { setRegionBusy } from "./lib/utils/html.js";
 import { pickActiveSchedule } from "./features/schedules/schedule-calculations.js";
+import { can as hasPermission, canAny as hasAnyPermission } from "./features/permissions/permission-service.js";
 import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Users, UserCog, FileText, CalendarDays, Clock3, ClipboardCheck, FileBarChart2, Settings2, ArrowUpRight, ArrowDownRight, MoreHorizontal, MapPin, Check, AlertCircle, CircleDashed, Search, Plus, LogOut, ShieldCheck, FolderOpen } from "lucide";
 
 const app = document.querySelector("#app");
@@ -265,8 +266,7 @@ async function wireOrganizationSwitcher(profile) {
 
 function renderAdminDashboard(profile) {
   const firstName = profile?.displayName?.split(" ")[0] || "there";
-  const perms = profile.permissions || [];
-  const can = (...needed) => needed.some((permission) => perms.includes(permission));
+  const hasBusiness = (profile.businessIds || []).length > 0;
   app.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
@@ -274,20 +274,20 @@ function renderAdminDashboard(profile) {
         <div class="workspace-select"><span>WORKSPACE ADMIN</span><button class="business-switcher" type="button" data-business-switcher><span><i data-lucide="building-2"></i> <b data-business-switcher-label>Bisnis ditugaskan</b></span><i data-lucide="chevron-down"></i></button><div class="business-switcher-menu" data-business-switcher-menu hidden></div></div>
         <nav class="main-nav" aria-label="Navigasi admin">
           <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
-          ${can("manageEmployees") ? `<a class="nav-item" href="#people" data-open-employees><i data-lucide="users"></i><span>Karyawan</span><b>02</b></a>` : ""}
-          ${can("viewAttendance", "approveLeave", "approveCorrections", "manageOvertime") ? `<a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>03</b></a>` : ""}
-          ${can("manageSchedules") ? `<a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal & shift</span><b>04</b></a>` : ""}
-          ${can("manageTasks", "viewReports") ? `<a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>05</b></a>` : ""}
-          ${can("viewReports", "reviewSubmissions") ? `<a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>06</b></a>` : ""}
-          ${perms.length ? `<a class="nav-item" href="#daily-report" data-open-daily-report><i data-lucide="file-text"></i><span>Laporan harian</span><b>07</b></a>` : ""}
-          ${perms.length ? `<a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>07</b></a>` : ""}
-          ${can("viewReports", "manageTasks") ? `<a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>08</b></a>` : ""}
+          ${hasPermission(profile, "manageEmployees") ? `<a class="nav-item" href="#people" data-open-employees><i data-lucide="users"></i><span>Karyawan</span><b>02</b></a>` : ""}
+          ${hasAnyPermission(profile, "approveLeave", "approveCorrections", "manageOvertime") ? `<a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>03</b></a>` : ""}
+          ${hasPermission(profile, "manageSchedules") ? `<a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal & shift</span><b>04</b></a>` : ""}
+          ${hasAnyPermission(profile, "manageTasks", "reviewSubmissions") ? `<a class="nav-item" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>05</b></a>` : ""}
+          ${hasPermission(profile, "viewReports") ? `<a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>06</b></a>` : ""}
+          ${hasAnyPermission(profile, "viewReports", "reviewSubmissions") ? `<a class="nav-item" href="#daily-report" data-open-daily-report><i data-lucide="file-text"></i><span>Laporan harian</span><b>07</b></a>` : ""}
+          ${hasBusiness ? `<a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>07</b></a>` : ""}
+          ${hasAnyPermission(profile, "viewReports", "manageTasks") ? `<a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>08</b></a>` : ""}
         </nav>
         <div class="sidebar-bottom"><div class="profile-mini">${profileAvatarMarkup(profile, "avatar")}<div><strong data-profile-name>${profile?.displayName || "User"}</strong><span data-profile-role>${profileRoleLabel(profile)}</span></div><button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button></div></div>
       </aside>
       <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>Admin overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>Memuat tanggal...</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button>${profileAvatarMarkup(profile, "avatar avatar-top")}</div></header>
         <main class="dashboard role-dashboard admin-dashboard" id="overview">
-          <section class="hero-row"><div><p class="eyebrow">ADMIN OPERATIONS</p><h1>${getGreeting()},<br><em>${firstName}.</em></h1><p class="hero-copy">Pantau pekerjaan dan jadwal bisnis yang menjadi tanggung jawab Anda.</p></div>${can("manageSchedules") ? `<button class="primary-button" data-open-schedules><i data-lucide="calendar-days"></i> Kelola jadwal</button>` : ""}</section>
+          <section class="hero-row"><div><p class="eyebrow">ADMIN OPERATIONS</p><h1>${getGreeting()},<br><em>${firstName}.</em></h1><p class="hero-copy">Pantau pekerjaan dan jadwal bisnis yang menjadi tanggung jawab Anda.</p></div>${hasPermission(profile, "manageSchedules") ? `<button class="primary-button" data-open-schedules><i data-lucide="calendar-days"></i> Kelola jadwal</button>` : ""}</section>
           <section class="metric-grid" aria-label="Ringkasan admin"><article class="metric-card metric-dark"><div class="metric-head"><span>KEHADIRAN HARI INI</span><i data-lucide="clock-3"></i></div><div class="metric-value" data-metric-attendance>—</div><div class="metric-foot"><span class="trend neutral" data-metric-attendance-foot>Bisnis Anda</span><span>data hari ini</span></div></article><article class="metric-card"><div class="metric-head"><span>PEOPLE DI BISNIS</span><i data-lucide="users"></i></div><div class="metric-value" data-metric-people>—</div><div class="metric-foot"><span class="trend neutral" data-metric-people-foot>Terpantau</span><span>sesuai akses</span></div></article><article class="metric-card metric-lime"><div class="metric-head"><span>TUGAS BERJALAN</span><i data-lucide="clipboard-check"></i></div><div class="metric-value" data-metric-tasks>—</div><div class="metric-foot"><span class="trend dark-trend" data-metric-tasks-foot>Operasional</span><span>hari ini</span></div></article><article class="metric-card"><div class="metric-head"><span>PERLU AKSI</span><i data-lucide="alert-circle"></i></div><div class="metric-value" data-metric-reviews>—</div><div class="metric-foot"><span class="trend warning" data-metric-reviews-foot>Review</span><span>sesuai izin</span></div></article></section>
           <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Ruang kerja Admin</h2><p>Data mengikuti bisnis dan izin yang diberikan Owner.</p></div></div><div class="admin-dashboard-detail" data-admin-detail><div class="role-empty-state"><strong>Memuat data...</strong><span>Menyiapkan ringkasan bisnis yang ditugaskan.</span></div></div></article><aside class="quick-panel"><div class="quick-label">ADMIN SCOPE</div><h2>Focus on<br><em>execution.</em></h2><p>Anda hanya dapat bekerja pada bisnis yang menjadi tanggung jawab Anda.</p></aside></section>
         </main>
@@ -647,8 +647,10 @@ subscribeToAuth(async (user) => {
     if (profile.role === "admin") {
       try {
         const memberships = await listMembershipsForUser(profile.uid, profile.organizationId);
-        const businessIds = [...new Set(memberships.filter((item) => item.status !== "inactive").map((item) => item.businessId))];
-        const permissions = [...new Set(memberships.flatMap((item) => item.permissions || []))];
+        const activeMemberships = memberships.filter((item) => item.status !== "inactive");
+        profile.memberships = activeMemberships;
+        const businessIds = [...new Set(activeMemberships.map((item) => item.businessId))];
+        const permissions = [...new Set(activeMemberships.flatMap((item) => item.permissions || []))];
         const stale = JSON.stringify(businessIds) !== JSON.stringify(profile.businessIds || [])
           || JSON.stringify(permissions) !== JSON.stringify(profile.permissions || []);
         if (stale) await updateUserProfile(profile.uid, { businessIds, permissions });

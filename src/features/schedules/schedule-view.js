@@ -12,6 +12,7 @@ import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 import { getDateKey } from "../../lib/utils/time.js";
 import { escapeHtml, setBusy, updateBusyLabel } from "../../lib/utils/html.js";
+import { canManageBusinessPermission } from "../permissions/permission-service.js";
 import { dateSpanDays, eachScheduleDate } from "./schedule-calculations.js";
 
 const WEEKDAY_VALUES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
@@ -141,7 +142,7 @@ export async function openScheduleManager({ profile, onClose }) {
   const businesses = profile.role === "owner"
     ? await listBusinessesForOrganization(organizationId)
     : (await Promise.all((profile.businessIds || []).map((id) => getBusiness(id)))).filter(Boolean);
-  const visibleBusinesses = businesses.filter((business) => business.status !== "inactive");
+  const visibleBusinesses = businesses.filter((business) => business.status !== "inactive" && canManageBusinessPermission(profile, business.id, "manageSchedules"));
   businessSelect.innerHTML = visibleBusinesses.length
     ? `<option value="">Pilih bisnis</option>${visibleBusinesses.map((business) => `<option value="${business.id}">${escapeHtml(business.name)}</option>`).join("")}`
     : `<option value="">Belum ada bisnis tersedia</option>`;

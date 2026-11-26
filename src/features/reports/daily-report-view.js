@@ -1,6 +1,7 @@
 import { getDateKey, getJakartaISO } from "../../lib/utils/time.js";
 import { escapeHtml, openWithBusy, setBusy } from "../../lib/utils/html.js";
 import {
+  getBusiness,
   getDailyReport,
   listBusinessesForOrganization,
   listDailyReportsForOrganization,
@@ -15,6 +16,7 @@ import { getDeadlineDate } from "../tasks/task-status.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 import { recordFileMetadata, requestDailyReportUploadSignature, requestFileAccess, uploadFileToCloudinary } from "../files/file-upload-service.js";
+import { can } from "../permissions/permission-service.js";
 
 const STATUS_LABELS = Object.freeze({
   draft: "Draf",
@@ -24,15 +26,15 @@ const STATUS_LABELS = Object.freeze({
 });
 
 export async function openDailyReportViewer({ profile }) {
-  const ownerMode = profile.role === "owner";
+  const reviewMode = profile.role === "owner" || (profile.role === "admin" && can(profile, "reviewSubmissions"));
   const overlay = document.createElement("div");
   overlay.className = "daily-report-overlay";
-  overlay.innerHTML = `<section class="daily-report-modal" role="dialog" aria-modal="true" aria-labelledby="daily-report-title"><div class="daily-report-head"><div><p class="eyebrow">DAILY REPORT</p><h2 id="daily-report-title">${ownerMode ? "Laporan harian tim" : "Laporan harian saya"}</h2><p>${ownerMode ? "Lihat dan tinjau laporan kerja harian per tanggal." : "Catat pekerjaan harian Anda. Tugas dengan deadline hari ini otomatis masuk."}</p></div><button class="icon-button daily-report-close" aria-label="Tutup">×</button></div><div class="daily-report-body"></div></section>`;
+  overlay.innerHTML = `<section class="daily-report-modal" role="dialog" aria-modal="true" aria-labelledby="daily-report-title"><div class="daily-report-head"><div><p class="eyebrow">DAILY REPORT</p><h2 id="daily-report-title">${reviewMode ? "Laporan harian tim" : "Laporan harian saya"}</h2><p>${reviewMode ? "Lihat dan tinjau laporan kerja harian per tanggal." : "Catat pekerjaan harian Anda. Tugas dengan deadline hari ini otomatis masuk."}</p></div><button class="icon-button daily-report-close" aria-label="Tutup">×</button></div><div class="daily-report-body"></div></section>`;
   document.body.append(overlay);
   overlay.querySelector(".daily-report-close").addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
   const body = overlay.querySelector(".daily-report-body");
-  if (ownerMode) await renderOwnerMode(body, profile);
+  if (reviewMode) await renderOwnerMode(body, profile, profile.role === "admin");
   else await renderPersonalMode(body, profile);
 }
 
@@ -180,7 +182,7 @@ function bindPersonalEvents(body, profile, reportDate, report, apply) {
   }));
 }
 
-async function renderOwnerMode(body, profile) {
+async function renderOwnerMode(body, profile, adminMode = false) {
   let reportDate = getDateKey();
   let businessId = "";
   let term = "";
@@ -188,19 +190,29 @@ async function renderOwnerMode(body, profile) {
   let selected = null;
   let message = "";
   let error = "";
-  const businesses = await listBusinessesForOrganization(profile.organizationId);
+  const businesses = adminMode
+    ? (await Promise.all((profile.businessIds || []).map((id) => getBusiness(id).catch(() => null)))).filter(Boolean)
+    : await listBusinessesForOrganization(profile.organizationId);
+  const businessIds = businesses.filter((business) => business.status !== "inactive").map((business) => business.id);
   const businessOptions = businesses.filter((business) => business.status !== "inactive").map((business) => `<option value="${business.id}">${escapeHtml(business.name)}</option>`).join("");
 
   await reload();
   async function reload() {
-    reports = await listDailyReportsForOrganization(profile.organizationId, reportDate, businessId || null);
+    const scopes = businessId ? [businessId] : businessIds;
+    const groups = await Promise.all(scopes.map((scope) => listDailyReportsForOrganization(profile.organizationId, reportDate, scope).catch(() => [])));
+    const seen = new Set();
+    reports = groups.flat().filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
     if (term) reports = reports.filter((item) => `${item.displayName || ""} ${item.email || ""} ${item.role || ""}`.toLowerCase().includes(term.toLowerCase()));
     if (!selected || !reports.some((item) => item.id === selected.id)) selected = reports[0] || null;
     render();
   }
 
   function render() {
-    body.innerHTML = `<div class="daily-report-toolbar"><div class="field"><label for="daily-owner-date">Tanggal</label><input id="daily-owner-date" type="date" value="${reportDate}" /></div><div class="field"><label for="daily-owner-business">Bisnis</label><select id="daily-owner-business"><option value="">Semua bisnis</option>${businessOptions}</select></div><div class="field"><label for="daily-owner-search">Cari</label><input id="daily-owner-search" type="search" value="${escapeHtml(term)}" placeholder="Nama atau email" /></div></div><p class="daily-report-error">${escapeHtml(error)}</p><p class="daily-report-message">${escapeHtml(message)}</p><div class="daily-report-grid"><div class="daily-report-list"><div class="daily-report-section-head"><h3>Laporan ${escapeHtml(reportDate)}</h3><span>${reports.length} laporan</span></div>${reports.length ? reports.map((item) => `<button class="daily-report-row ${selected?.id === item.id ? "is-selected" : ""}" data-daily-report-select="${escapeHtml(item.id)}"><strong>${escapeHtml(item.displayName || item.email || "Karyawan")}</strong><span>${escapeHtml(item.role || "-")} · ${escapeHtml(STATUS_LABELS[item.status] || item.status)}</span><small>${escapeHtml(item.submittedAt ? formatDate(item.submittedAt) : "Belum dikirim")}</small></button>`).join("") : `<div class="role-empty-state"><strong>Belum ada laporan.</strong><span>Coba tanggal atau filter lain.</span></div>`}</div><div class="daily-report-detail">${selected ? renderDetail(selected) : `<div class="role-empty-state"><strong>Pilih laporan.</strong><span>Detail laporan akan tampil di sini.</span></div>`}</div></div>`;
+    body.innerHTML = `<div class="daily-report-toolbar"><div class="field"><label for="daily-owner-date">Tanggal</label><input id="daily-owner-date" type="date" value="${reportDate}" /></div><div class="field"><label for="daily-owner-business">Bisnis</label><select id="daily-owner-business"><option value="">Semua bisnis</option>${businessOptions}</select></div><div class="field"><label for="daily-owner-search">Cari</label><input id="daily-owner-search" type="search" value="${escapeHtml(term)}" placeholder="Nama atau email" /></div></div><p class="daily-report-error">${escapeHtml(error)}</p><p class="daily-report-message">${escapeHtml(message)}</p><div class="daily-report-grid"><div class="daily-report-list"><div class="daily-report-section-head"><h3>Laporan ${escapeHtml(reportDate)}</h3><span>${reports.length} laporan</span></div>${reports.length ? reports.map((item) => `<button class="daily-report-row ${selected?.id === item.id ? "is-selected" : ""}" data-daily-report-select="${escapeHtml(item.id)}"><strong>${escapeHtml(item.displayName || item.email || "Karyawan")}</strong><span>${escapeHtml(item.role || "-")} · ${escapeHtml(STATUS_LABELS[item.status] || item.status)}</span><small>${escapeHtml(item.submittedAt ? formatDate(item.submittedAt) : "Belum dikirim")}</small></button>`).join("") : `<div class="role-empty-state"><strong>Belum ada laporan.</strong><span>Coba tanggal atau filter lain.</span></div>`}</div><div class="daily-report-detail">${selected ? renderDetail(selected, true) : `<div class="role-empty-state"><strong>Pilih laporan.</strong><span>Detail laporan akan tampil di sini.</span></div>`}</div></div>`;
     body.querySelector("#daily-owner-date").addEventListener("change", (event) => { reportDate = event.target.value || getDateKey(); selected = null; reload(); });
     body.querySelector("#daily-owner-business").addEventListener("change", (event) => { businessId = event.target.value; selected = null; reload(); });
     body.querySelector("#daily-owner-search").addEventListener("input", (event) => { term = event.target.value; selected = null; reload(); });
@@ -211,18 +223,24 @@ async function renderOwnerMode(body, profile) {
       render();
     }));
     body.querySelectorAll("[data-daily-review]").forEach((button) => button.addEventListener("click", async () => {
-      const action = button.dataset.dailyReview;
-      const reviewNote = action === "revision" ? window.prompt("Catatan revisi:", "") || "" : "";
-      const reviewedAt = getJakartaISO();
-      await reviewDailyReport(selected.id, { status: action === "revision" ? DAILY_REPORT_STATUS.REVISION : DAILY_REPORT_STATUS.REVIEWED, reviewedBy: profile.uid, reviewedAt, reviewNote });
-      logAuditSafe({ profile, action: action === "revision" ? "daily_report_revision_requested" : "daily_report_reviewed", targetType: "dailyReport", targetId: selected.id, metadata: { reportDate, reviewNote } });
-      notifySafe({ id: `daily_report_${action}_${selected.id}_${reviewedAt}`, type: action === "revision" ? NOTIFICATION_TYPES.dailyReportRevisionRequested : NOTIFICATION_TYPES.dailyReportReviewed, title: action === "revision" ? "Laporan harian perlu revisi" : "Laporan harian ditinjau", body: reviewNote || reportDate, organizationId: profile.organizationId, businessId: selected.businessIds?.[0] || null, targetType: "dailyReport", targetId: selected.id, userIds: [selected.userId] });
-      message = action === "revision" ? "Permintaan revisi dikirim." : "Laporan ditandai ditinjau.";
-      const selectedId = selected.id;
-      selected = null;
-      await reload();
-      selected = reports.find((item) => item.id === selectedId) || selected || null;
-      render();
+      const restore = setBusy(button, "Menyimpan review...");
+      try {
+        const action = button.dataset.dailyReview;
+        const reviewNote = action === "revision" ? window.prompt("Catatan revisi:", "") || "" : "";
+        const reviewedAt = getJakartaISO();
+        await reviewDailyReport(selected.id, { status: action === "revision" ? DAILY_REPORT_STATUS.REVISION : DAILY_REPORT_STATUS.REVIEWED, reviewedBy: profile.uid, reviewedAt, reviewNote });
+        logAuditSafe({ profile, action: action === "revision" ? "daily_report_revision_requested" : "daily_report_reviewed", targetType: "dailyReport", targetId: selected.id, metadata: { reportDate, reviewNote } });
+        notifySafe({ id: `daily_report_${action}_${selected.id}_${reviewedAt}`, type: action === "revision" ? NOTIFICATION_TYPES.dailyReportRevisionRequested : NOTIFICATION_TYPES.dailyReportReviewed, title: action === "revision" ? "Laporan harian perlu revisi" : "Laporan harian ditinjau", body: reviewNote || reportDate, organizationId: profile.organizationId, businessId: selected.businessIds?.[0] || null, targetType: "dailyReport", targetId: selected.id, userIds: [selected.userId] });
+        message = action === "revision" ? "Permintaan revisi dikirim." : "Laporan ditandai ditinjau.";
+        const selectedId = selected.id;
+        selected = null;
+        await reload();
+        selected = reports.find((item) => item.id === selectedId) || selected || null;
+        render();
+      } catch (reviewError) {
+        error = reviewError.message;
+        render();
+      } finally { restore(); }
     }));
     body.querySelectorAll("[data-daily-file-open]").forEach((button) => button.addEventListener("click", async () => {
       try {
@@ -233,8 +251,11 @@ async function renderOwnerMode(body, profile) {
   }
 }
 
-function renderDetail(report) {
-  return `<div class="daily-report-detail-head"><div><h3>${escapeHtml(report.displayName || report.email || "Karyawan")}</h3><p>${escapeHtml(report.role || "-")} · ${escapeHtml(reportDateLabel(report.reportDate))}</p></div><span class="daily-report-pill ${escapeHtml(report.status)}">${STATUS_LABELS[report.status] || report.status}</span></div>${report.reviewNote ? `<p class="daily-report-review-note"><strong>Catatan review:</strong> ${escapeHtml(report.reviewNote)}</p>` : ""}<h4>Catatan harian</h4><p class="daily-report-notes">${escapeHtml(report.notes || "-")}</p><h4>Tugas</h4>${renderTaskEntries(report.tasks || [])}<h4>Lampiran</h4>${renderAttachments(report.attachments || [])}<div class="daily-report-actions"><button class="secondary-button" type="button" data-daily-review="revision" ${report.status === DAILY_REPORT_STATUS.REVIEWED ? "disabled" : ""}>Minta revisi</button><button class="primary-button" type="button" data-daily-review="reviewed" ${report.status === DAILY_REPORT_STATUS.REVIEWED ? "disabled" : ""}>Tandai ditinjau</button></div>`;
+function renderDetail(report, canReview = false) {
+  const reviewActions = canReview
+    ? `<div class="daily-report-actions"><button class="secondary-button" type="button" data-daily-review="revision" ${report.status === DAILY_REPORT_STATUS.REVIEWED ? "disabled" : ""}>Minta revisi</button><button class="primary-button" type="button" data-daily-review="reviewed" ${report.status === DAILY_REPORT_STATUS.REVIEWED ? "disabled" : ""}>Tandai ditinjau</button></div>`
+    : "";
+  return `<div class="daily-report-detail-head"><div><h3>${escapeHtml(report.displayName || report.email || "Karyawan")}</h3><p>${escapeHtml(report.role || "-")} · ${escapeHtml(reportDateLabel(report.reportDate))}</p></div><span class="daily-report-pill ${escapeHtml(report.status)}">${STATUS_LABELS[report.status] || report.status}</span></div>${report.reviewNote ? `<p class="daily-report-review-note"><strong>Catatan review:</strong> ${escapeHtml(report.reviewNote)}</p>` : ""}<h4>Catatan harian</h4><p class="daily-report-notes">${escapeHtml(report.notes || "-")}</p><h4>Tugas</h4>${renderTaskEntries(report.tasks || [])}<h4>Lampiran</h4>${renderAttachments(report.attachments || [])}${reviewActions}`;
 }
 
 function renderTaskEntries(entries) {

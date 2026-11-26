@@ -15,6 +15,7 @@ import { DEFAULT_TASK_CATEGORIES } from "../../config/constants.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { escapeHtml } from "../../lib/utils/html.js";
 import { getDateKey } from "../../lib/utils/time.js";
+import { canManageBusinessPermission } from "../permissions/permission-service.js";
 
 const STATUS_LABELS = Object.freeze({ active: "Aktif", inactive: "Nonaktif", pending: "Pending", suspended: "Suspended" });
 
@@ -51,8 +52,9 @@ export async function openEmployeeManager({ profile }) {
   const activeBusinesses = allBusinesses.filter((business) => business.status !== "inactive");
   const businessMap = new Map(allBusinesses.map((business) => [business.id, business]));
   const businessOptions = activeBusinesses.map((business) => `<option value="${business.id}">${escapeHtml(business.name)}</option>`).join("");
+  const taskBusinesses = activeBusinesses.filter((business) => canManageBusinessPermission(profile, business.id, "manageTasks"));
   businessFilter.innerHTML = `<option value="">Semua bisnis</option>${businessOptions}`;
-  quickBusinessSelect.innerHTML = `<option value="">Pilih bisnis</option>${businessOptions}`;
+  quickBusinessSelect.innerHTML = `<option value="">Pilih bisnis</option>${taskBusinesses.map((business) => `<option value="${business.id}">${escapeHtml(business.name)}</option>`).join("")}`;
 
   try {
     const categories = await listTaskCategories(organizationId);
@@ -93,7 +95,7 @@ export async function openEmployeeManager({ profile }) {
     });
     count.textContent = visible.filter((employee) => employee.status === "active").length;
     quickEmployeeSelect.innerHTML = `<option value="">Pilih karyawan aktif</option>${employees.filter((employee) => employee.status === "active").map((employee) => `<option value="${employee.id}">${escapeHtml(employee.displayName || employee.email)}</option>`).join("")}`;
-    list.innerHTML = visible.length ? visible.map((employee) => employeeRow(employee, businessMap, taskCounts)).join("") : `<div class="registration-empty-state"><strong>Belum ada karyawan.</strong><span>Coba ubah pencarian atau filter status/bisnis.</span></div>`;
+    list.innerHTML = visible.length ? visible.map((employee) => employeeRow(employee, businessMap, taskCounts, profile)).join("") : `<div class="registration-empty-state"><strong>Belum ada karyawan.</strong><span>Coba ubah pencarian atau filter status/bisnis.</span></div>`;
     bindRowActions();
   };
 
@@ -142,7 +144,9 @@ export async function openEmployeeManager({ profile }) {
       if (employee.status !== "active") { message.textContent = "Aktifkan karyawan terlebih dahulu sebelum memberi tugas."; return; }
       quickForm.hidden = false;
       quickEmployeeSelect.value = employee.id;
-      quickBusinessSelect.value = employee.businessIds?.[0] || "";
+      quickBusinessSelect.value = taskBusinesses.some((business) => business.id === employee.businessIds?.[0])
+        ? employee.businessIds[0]
+        : taskBusinesses[0]?.id || "";
       quickError.textContent = "";
       quickMessage.textContent = "";
       quickForm.scrollIntoView({ block: "nearest" });
@@ -180,12 +184,15 @@ export async function openEmployeeManager({ profile }) {
   await loadEmployees();
 }
 
-function employeeRow(employee, businessMap, taskCounts) {
+function employeeRow(employee, businessMap, taskCounts, profile) {
   const status = employee.status || "pending";
   const label = STATUS_LABELS[status] || status;
   const nextStatus = status === "active" ? "inactive" : "active";
   const businesses = (employee.businessIds || []).map((id) => businessMap.get(id)?.name || "Bisnis").join(", ") || "Belum ditempatkan";
   const currentBusiness = employee.businessIds?.[0] || "";
   const activeBusinesses = [...businessMap.values()].filter((business) => business.status !== "inactive");
-  return `<article class="employee-management-row"><div class="registration-avatar">${escapeHtml((employee.displayName || employee.email || "E").slice(0, 1)).toUpperCase()}</div><div class="registration-person"><strong>${escapeHtml(employee.displayName || "Tanpa nama")}</strong><span>${escapeHtml(employee.email || "Email tidak tersedia")}</span><small>${escapeHtml(businesses)}${employee.position ? ` · ${escapeHtml(employee.position)}` : ""}${employee.phone ? ` · ${escapeHtml(employee.phone)}` : ""}${employee.joinedAt ? ` · sejak ${escapeHtml(employee.joinedAt)}` : ""} · ${taskCounts.get(employee.id) || 0} tugas aktif</small></div><span class="employee-status">${label}</span><div class="owner-employee-actions"><button class="approve-registration" data-toggle-employee="${employee.id}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Aktifkan" : "Nonaktifkan"}</button>${employee.email ? `<button class="secondary-button" data-reset-employee="${employee.id}" data-reset-email="${escapeHtml(employee.email)}">Reset password</button>` : ""}<button class="secondary-button" data-view-employee-tasks="${employee.id}">Lihat tugas</button>${status === "active" ? `<button class="primary-button" data-give-employee-task="${employee.id}">Beri tugas</button>` : ""}</div><form class="employee-transfer-form" data-current-business="${escapeHtml(currentBusiness)}"><select data-transfer-business><option value="">Pilih bisnis tujuan</option>${activeBusinesses.map((business) => `<option value="${business.id}" ${business.id === currentBusiness ? "selected" : ""}>${escapeHtml(business.name)}</option>`).join("")}</select><button class="secondary-button" type="button" data-transfer-employee="${employee.id}">Pindahkan</button></form><p class="registration-error" role="alert"></p></article>`;
+  const canTransfer = profile.role === "owner";
+  const canGiveTask = canManageBusinessPermission(profile, currentBusiness, "manageTasks");
+  const transferOptions = canTransfer ? activeBusinesses : [];
+  return `<article class="employee-management-row"><div class="registration-avatar">${escapeHtml((employee.displayName || employee.email || "E").slice(0, 1)).toUpperCase()}</div><div class="registration-person"><strong>${escapeHtml(employee.displayName || "Tanpa nama")}</strong><span>${escapeHtml(employee.email || "Email tidak tersedia")}</span><small>${escapeHtml(businesses)}${employee.position ? ` · ${escapeHtml(employee.position)}` : ""}${employee.phone ? ` · ${escapeHtml(employee.phone)}` : ""}${employee.joinedAt ? ` · sejak ${escapeHtml(employee.joinedAt)}` : ""} · ${taskCounts.get(employee.id) || 0} tugas aktif</small></div><span class="employee-status">${label}</span><div class="owner-employee-actions"><button class="approve-registration" data-toggle-employee="${employee.id}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Aktifkan" : "Nonaktifkan"}</button>${employee.email ? `<button class="secondary-button" data-reset-employee="${employee.id}" data-reset-email="${escapeHtml(employee.email)}">Reset password</button>` : ""}<button class="secondary-button" data-view-employee-tasks="${employee.id}">Lihat tugas</button>${status === "active" && canGiveTask ? `<button class="primary-button" data-give-employee-task="${employee.id}">Beri tugas</button>` : ""}</div>${canTransfer ? `<form class="employee-transfer-form" data-current-business="${escapeHtml(currentBusiness)}"><select data-transfer-business><option value="">Pilih bisnis tujuan</option>${transferOptions.map((business) => `<option value="${business.id}" ${business.id === currentBusiness ? "selected" : ""}>${escapeHtml(business.name)}</option>`).join("")}</select><button class="secondary-button" type="button" data-transfer-employee="${employee.id}">Pindahkan</button></form>` : ""}<p class="registration-error" role="alert"></p></article>`;
 }
