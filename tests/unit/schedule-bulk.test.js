@@ -61,7 +61,7 @@ describe("bulk schedule assignment wiring", () => {
   it("uses simple employee checkboxes and reports results", () => {
     expect(view).toContain('class="task-assignee-list" id="assign-employees"');
     expect(view).toContain("data-assign-employee");
-    expect(view).toContain("listEmployeesForBusiness(organizationId, businessId)");
+    expect(view).toContain("listEmployeesForBusiness(organizationId, assignmentBusinessId)");
     expect(view).not.toContain("data-assignee-all");
     expect(view).not.toContain("data-assignee-none");
     expect(view).toContain("Dilewati:");
@@ -106,6 +106,23 @@ describe("bulk schedule assignment wiring", () => {
   it("auto-selects an available business for owners and admins", () => {
     expect(view).toContain("profile.selectedBusinessId || profile.businessIds?.[0] || null");
     expect(view).toContain("visibleBusinesses[0]?.id");
+  });
+
+  it("uses a separate required business selector for schedule assignment", () => {
+    expect(view).toContain('id="assign-business" required');
+    expect(view).toContain("let assignmentBusinessId = \"\"");
+    expect(view).toContain("assignmentBusinessSelect.innerHTML = businessOptions");
+    expect(view).toContain("shiftOptions(assignmentShifts)");
+    expect(view).toContain("businessId: assignmentBusinessId");
+    expect(view).toContain("Pilih bisnis terlebih dahulu.");
+  });
+
+  it("keeps shift and schedule scopes independent", () => {
+    expect(view).toContain("const loadShifts = async () => {");
+    expect(view).toContain("const loadAssignmentData = async () => {");
+    expect(view).toContain("shiftBusinessId = businessSelect.value || null");
+    expect(view).toContain("assignmentBusinessId = assignmentBusinessSelect.value || \"\"");
+    expect(view).not.toContain("await load();");
   });
 });
 

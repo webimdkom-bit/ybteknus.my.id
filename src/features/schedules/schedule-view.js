@@ -20,8 +20,10 @@ const WEEKDAY_LABELS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
 export async function openScheduleManager({ profile, onClose }) {
   const organizationId = profile.organizationId;
-  let businessId = profile.selectedBusinessId || profile.businessIds?.[0] || null;
+  let shiftBusinessId = profile.selectedBusinessId || profile.businessIds?.[0] || null;
+  let assignmentBusinessId = "";
   let currentShifts = [];
+  let assignmentShifts = [];
   let currentSchedules = [];
   let employeeNames = new Map();
   let editingShiftId = null;
@@ -46,7 +48,8 @@ export async function openScheduleManager({ profile, onClose }) {
           </form>
           <form class="shift-form assignment-form" id="assignment-form">
             <h3>Tetapkan jadwal karyawan</h3>
-            <p class="field-hint">Pilih karyawan, shift, rentang tanggal, dan hari yang ingin dijadwalkan. Maksimal 31 hari.</p>
+            <p class="field-hint">Pilih bisnis, karyawan, shift, rentang tanggal, dan hari yang ingin dijadwalkan. Maksimal 31 hari.</p>
+            <div class="field"><label for="assign-business">Bisnis</label><select id="assign-business" required><option value="">Memuat bisnis...</option></select></div>
             <div class="field"><label>Karyawan <span>(karyawan sesuai bisnis)</span></label><div class="task-assignee-list" id="assign-employees"><p class="task-empty">Memuat karyawan...</p></div></div>
             <div class="field"><label for="assign-shift">Shift</label><select id="assign-shift" required><option value="">Pilih shift</option></select></div>
             <div class="schedule-fields"><div class="field"><label for="assign-from">Tanggal mulai</label><input id="assign-from" type="date" required /></div><div class="field"><label for="assign-to">Tanggal selesai</label><input id="assign-to" type="date" required /></div></div>
@@ -84,6 +87,7 @@ export async function openScheduleManager({ profile, onClose }) {
   const count = overlay.querySelector(".shift-count");
   const scheduleCount = overlay.querySelector(".schedule-count");
   const businessSelect = overlay.querySelector("#shift-business");
+  const assignmentBusinessSelect = overlay.querySelector("#assign-business");
   const employeeList = overlay.querySelector("#assign-employees");
   const shiftSelect = overlay.querySelector("#assign-shift");
   const fromInput = overlay.querySelector("#assign-from");
@@ -143,13 +147,15 @@ export async function openScheduleManager({ profile, onClose }) {
     ? await listBusinessesForOrganization(organizationId)
     : (await Promise.all((profile.businessIds || []).map((id) => getBusiness(id)))).filter(Boolean);
   const visibleBusinesses = businesses.filter((business) => business.status !== "inactive" && canManageBusinessPermission(profile, business.id, "manageSchedules"));
-  businessSelect.innerHTML = visibleBusinesses.length
+  const businessOptions = visibleBusinesses.length
     ? `<option value="">Pilih bisnis</option>${visibleBusinesses.map((business) => `<option value="${business.id}">${escapeHtml(business.name)}</option>`).join("")}`
     : `<option value="">Belum ada bisnis tersedia</option>`;
-  if (!businessId || !visibleBusinesses.some((business) => business.id === businessId)) businessId = visibleBusinesses[0]?.id || null;
-  if (businessId) businessSelect.value = businessId;
+  businessSelect.innerHTML = businessOptions;
+  assignmentBusinessSelect.innerHTML = businessOptions;
+  if (!shiftBusinessId || !visibleBusinesses.some((business) => business.id === shiftBusinessId)) shiftBusinessId = visibleBusinesses[0]?.id || null;
+  if (shiftBusinessId) businessSelect.value = shiftBusinessId;
 
-  const shiftOptions = (withPlaceholder = true) => `${withPlaceholder ? `<option value="">Pilih shift</option>` : ""}${currentShifts.filter((shift) => shift.status !== "inactive").map((shift) => `<option value="${shift.id}">${escapeHtml(shift.name)} · ${escapeHtml(shift.startTime)}–${escapeHtml(shift.endTime)}</option>`).join("")}`;
+  const shiftOptions = (shifts = [], withPlaceholder = true) => `${withPlaceholder ? `<option value="">Pilih shift</option>` : ""}${shifts.filter((shift) => shift.status !== "inactive").map((shift) => `<option value="${shift.id}">${escapeHtml(shift.name)} · ${escapeHtml(shift.startTime)}–${escapeHtml(shift.endTime)}</option>`).join("")}`;
 
   const resetShiftForm = () => {
     editingShiftId = null;
@@ -163,7 +169,7 @@ export async function openScheduleManager({ profile, onClose }) {
     overlay.querySelector("#shift-break").value = "60";
     overlay.querySelector("#shift-tolerance").value = "15";
     shiftForm.querySelectorAll("input[name=workDays]").forEach((input, index) => { input.checked = index < 5; });
-    if (businessId) shiftForm.querySelector("#shift-business").value = businessId;
+    if (shiftBusinessId) shiftForm.querySelector("#shift-business").value = shiftBusinessId;
   };
   resetShiftForm();
 
@@ -173,32 +179,41 @@ export async function openScheduleManager({ profile, onClose }) {
     scheduleIdInput.value = "";
   };
 
-  const load = async () => {
+  const loadShifts = async () => {
     try {
-      const [shifts, schedules, employees] = businessId
-        ? await Promise.all([
-            listShifts(organizationId, businessId),
-            listSchedules({ organizationId, businessId }),
-            listEmployeesForBusiness(organizationId, businessId),
-          ])
-        : [[], [], []];
+      const shifts = shiftBusinessId ? await listShifts(organizationId, shiftBusinessId) : [];
       currentShifts = shifts;
-      currentSchedules = schedules;
-      employeeNames = new Map(employees.map((employee) => [employee.id, employee.displayName || employee.email || "Tanpa nama"]));
       count.textContent = currentShifts.length;
-      scheduleCount.textContent = currentSchedules.length;
       list.innerHTML = currentShifts.length
         ? currentShifts.map((shift) => `<div class="shift-row"><div><strong>${escapeHtml(shift.name)}</strong><span>${escapeHtml(shift.startTime)} – ${escapeHtml(shift.endTime)} · toleransi ${shift.toleranceMinutes || 0}m · istirahat ${shift.breakMinutes || 0}m</span></div><b>${shift.workDays?.length || 0} hari${shift.status === "inactive" ? " · nonaktif" : ""}</b><div class="shift-actions"><button class="secondary-button" type="button" data-shift-edit="${shift.id}">Edit</button><button class="reject-registration" type="button" data-shift-delete="${shift.id}">Hapus</button></div></div>`).join("")
         : `<p class="shift-empty">Belum ada shift untuk bisnis ini.</p>`;
+    } catch (error) {
+      list.innerHTML = `<p class="shift-error">${escapeHtml(error.message)}</p>`;
+    }
+  };
+
+  const loadAssignmentData = async () => {
+    try {
+      const [shifts, schedules, employees] = assignmentBusinessId
+        ? await Promise.all([
+            listShifts(organizationId, assignmentBusinessId),
+            listSchedules({ organizationId, businessId: assignmentBusinessId }),
+            listEmployeesForBusiness(organizationId, assignmentBusinessId),
+          ])
+        : [[], [], []];
+      assignmentShifts = shifts;
+      currentSchedules = schedules;
+      employeeNames = new Map(employees.map((employee) => [employee.id, employee.displayName || employee.email || "Tanpa nama"]));
+      scheduleCount.textContent = currentSchedules.length;
       scheduleList.innerHTML = currentSchedules.length
         ? [...currentSchedules].sort((a, b) => String(b.date).localeCompare(String(a.date))).map((schedule) => {
-            const shift = currentShifts.find((item) => item.id === schedule.shiftId);
+            const shift = assignmentShifts.find((item) => item.id === schedule.shiftId);
             const status = schedule.status || "active";
             return `<div class="shift-row schedule-row"><div><strong>${escapeHtml(employeeNames.get(schedule.userId) || schedule.userId)}</strong><span>${escapeHtml(schedule.date)} · ${escapeHtml(shift?.name || "Shift tidak ditemukan")} · ${escapeHtml(shift ? `${shift.startTime}–${shift.endTime}` : "-")}</span></div><b>${status === "active" ? "Aktif" : "Dibatalkan"}</b><div class="shift-actions"><button class="secondary-button" type="button" data-schedule-edit="${schedule.id}">Edit</button><button class="reject-registration" type="button" data-schedule-delete="${schedule.id}">Hapus</button></div></div>`;
           }).join("")
-        : `<p class="shift-empty">Belum ada jadwal untuk bisnis ini.</p>`;
-      shiftSelect.innerHTML = shiftOptions();
-      scheduleEditShift.innerHTML = shiftOptions();
+        : `<p class="shift-empty">${assignmentBusinessId ? "Belum ada jadwal untuk bisnis ini." : "Pilih bisnis terlebih dahulu."}</p>`;
+      shiftSelect.innerHTML = shiftOptions(assignmentShifts);
+      scheduleEditShift.innerHTML = shiftOptions(assignmentShifts);
       if (editingScheduleId && currentSchedules.some((item) => item.id === editingScheduleId)) {
         const schedule = currentSchedules.find((item) => item.id === editingScheduleId);
         scheduleEditShift.value = schedule.shiftId;
@@ -208,22 +223,32 @@ export async function openScheduleManager({ profile, onClose }) {
       }
       employeeList.innerHTML = employees.length
         ? employees.map((employee) => `<label class="task-assignee-option"><input type="checkbox" value="${employee.id}" data-assign-employee="${employee.id}" /><span>${escapeHtml(employee.displayName || employee.email || "Tanpa nama")}</span></label>`).join("")
-        : `<p class="task-empty">Belum ada karyawan pada bisnis ini.</p>`;
+        : `<p class="task-empty">${assignmentBusinessId ? "Belum ada karyawan pada bisnis ini." : "Pilih bisnis terlebih dahulu."}</p>`;
       updateRangePreview();
     } catch (error) {
-      list.innerHTML = `<p class="shift-error">${escapeHtml(error.message)}</p>`;
+      scheduleList.innerHTML = `<p class="shift-error">${escapeHtml(error.message)}</p>`;
     }
   };
 
+  const loadAll = async () => {
+    await Promise.all([loadShifts(), loadAssignmentData()]);
+  };
+
   businessSelect.addEventListener("change", () => {
-    businessId = businessSelect.value || null;
+    shiftBusinessId = businessSelect.value || null;
     resetShiftForm();
     hideScheduleEditor();
-    load();
+    loadShifts();
+  });
+  assignmentBusinessSelect.addEventListener("change", () => {
+    assignmentBusinessId = assignmentBusinessSelect.value || "";
+    employeeList.querySelectorAll("[data-assign-employee]").forEach((input) => { input.checked = false; });
+    hideScheduleEditor();
+    loadAssignmentData();
   });
   shiftCancel.addEventListener("click", resetShiftForm);
   overlay.querySelector("[data-schedule-cancel]").addEventListener("click", hideScheduleEditor);
-  await load();
+  await loadAll();
 
   shiftForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -233,18 +258,18 @@ export async function openScheduleManager({ profile, onClose }) {
     const restore = setBusy(shiftSubmit, editingShiftId ? "Menyimpan perubahan..." : "Menyimpan shift...");
     error.textContent = "";
     try {
-      if (!businessId) throw new Error("Pilih bisnis terlebih dahulu.");
+      if (!shiftBusinessId) throw new Error("Pilih bisnis terlebih dahulu.");
       if (editingShiftId) {
-        await updateShiftAssignment({ organizationId, businessId, shiftId: editingShiftId, fields: data });
-        logAuditSafe({ profile, action: "shift_updated", targetType: "shift", targetId: editingShiftId, businessId, metadata: { name: data.name } });
+        await updateShiftAssignment({ organizationId, businessId: shiftBusinessId, shiftId: editingShiftId, fields: data });
+        logAuditSafe({ profile, action: "shift_updated", targetType: "shift", targetId: editingShiftId, businessId: shiftBusinessId, metadata: { name: data.name } });
         shiftForm.querySelector(".schedule-message")?.replaceChildren();
       } else {
-        const shift = await addShift({ ...data, organizationId, businessId });
-        logAuditSafe({ profile, action: "shift_created", targetType: "shift", targetId: shift?.id || null, businessId, metadata: { name: data.name, startTime: data.startTime, endTime: data.endTime } });
-        notifySafe({ type: NOTIFICATION_TYPES.scheduleAssigned, title: "Jadwal/shift baru", body: `${data.name} · ${data.startTime}–${data.endTime}`, organizationId, businessId, targetType: "shift", targetId: shift?.id || null, audience: "owner" });
+        const shift = await addShift({ ...data, organizationId, businessId: shiftBusinessId });
+        logAuditSafe({ profile, action: "shift_created", targetType: "shift", targetId: shift?.id || null, businessId: shiftBusinessId, metadata: { name: data.name, startTime: data.startTime, endTime: data.endTime } });
+        notifySafe({ type: NOTIFICATION_TYPES.scheduleAssigned, title: "Jadwal/shift baru", body: `${data.name} · ${data.startTime}–${data.endTime}`, organizationId, businessId: shiftBusinessId, targetType: "shift", targetId: shift?.id || null, audience: "owner" });
       }
       resetShiftForm();
-      await load();
+      await loadAll();
     } catch (submissionError) { error.textContent = submissionError.message; }
     finally { restore(); }
   });
@@ -261,7 +286,7 @@ export async function openScheduleManager({ profile, onClose }) {
       shiftSubmit.innerHTML = `Simpan perubahan <span>→</span>`;
       shiftCancel.hidden = false;
       shiftForm.querySelector("#shift-name").value = shift.name;
-      shiftForm.querySelector("#shift-business").value = businessId;
+      shiftForm.querySelector("#shift-business").value = shiftBusinessId;
       shiftForm.querySelector("#shift-start").value = shift.startTime;
       shiftForm.querySelector("#shift-end").value = shift.endTime;
       shiftForm.querySelector("#shift-break").value = shift.breakMinutes || 0;
@@ -274,10 +299,10 @@ export async function openScheduleManager({ profile, onClose }) {
       if (!window.confirm("Hapus shift ini?")) return;
       const restore = setBusy(deleteButton, "Menghapus...");
       try {
-        await deleteShiftAssignment({ organizationId, businessId, shiftId: deleteButton.dataset.shiftDelete });
-        logAuditSafe({ profile, action: "shift_deleted", targetType: "shift", targetId: deleteButton.dataset.shiftDelete, businessId });
+        await deleteShiftAssignment({ organizationId, businessId: shiftBusinessId, shiftId: deleteButton.dataset.shiftDelete });
+        logAuditSafe({ profile, action: "shift_deleted", targetType: "shift", targetId: deleteButton.dataset.shiftDelete, businessId: shiftBusinessId });
         if (editingShiftId === deleteButton.dataset.shiftDelete) resetShiftForm();
-        await load();
+        await loadAll();
       } catch (deleteError) { overlay.querySelector("#shift-form .schedule-error").textContent = deleteError.message; }
       finally { restore(); }
     }
@@ -291,6 +316,10 @@ export async function openScheduleManager({ profile, onClose }) {
     const userIds = selectedEmployeeIds();
     const shiftId = shiftSelect.value;
     const weekdays = selectedWeekdays();
+    if (!assignmentBusinessId) {
+      error.textContent = "Pilih bisnis terlebih dahulu.";
+      return;
+    }
     if (!userIds.length || !shiftId || !fromInput.value || !toInput.value || !effectiveInput.value || !weekdays.length) {
       error.textContent = "Pilih karyawan, shift, rentang tanggal, hari, dan tanggal efektif.";
       return;
@@ -300,7 +329,7 @@ export async function openScheduleManager({ profile, onClose }) {
     try {
       const result = await assignShiftRange({
         organizationId,
-        businessId,
+        businessId: assignmentBusinessId,
         userIds,
         shiftId,
         from: fromInput.value,
@@ -315,7 +344,7 @@ export async function openScheduleManager({ profile, onClose }) {
         action: "schedule_range_assigned",
         targetType: "schedule",
         targetId: result.created[0]?.id || null,
-        businessId,
+        businessId: assignmentBusinessId,
         metadata: { userIds, from: fromInput.value, to: toInput.value, weekdays, created: result.created.length, skipped: result.skipped.length, batchId: result.batchId },
       });
       if (result.created.length) {
@@ -325,7 +354,7 @@ export async function openScheduleManager({ profile, onClose }) {
           title: "Jadwal kerja ditetapkan",
           body: `${fromInput.value} s/d ${toInput.value} · ${result.created.length} jadwal`,
           organizationId,
-          businessId,
+          businessId: assignmentBusinessId,
           targetType: "schedule",
           targetId: result.created[0].id,
           userIds: result.created.map((schedule) => schedule.userId),
@@ -337,7 +366,7 @@ export async function openScheduleManager({ profile, onClose }) {
       error.textContent = "";
       employeeList.querySelectorAll("[data-assign-employee]").forEach((input) => { input.checked = false; });
       updateRangePreview();
-      await load();
+      await loadAll();
     } catch (assignmentError) { error.textContent = assignmentError.message; }
     finally { restore(); }
   });
@@ -351,7 +380,7 @@ export async function openScheduleManager({ profile, onClose }) {
     try {
       await updateScheduleAssignment({
         organizationId,
-        businessId,
+        businessId: assignmentBusinessId,
         scheduleId: editingScheduleId,
         fields: {
           shiftId: scheduleEditShift.value,
@@ -360,10 +389,10 @@ export async function openScheduleManager({ profile, onClose }) {
           status: scheduleEditStatus.value,
         },
       });
-      logAuditSafe({ profile, action: "schedule_updated", targetType: "schedule", targetId: editingScheduleId, businessId });
+      logAuditSafe({ profile, action: "schedule_updated", targetType: "schedule", targetId: editingScheduleId, businessId: assignmentBusinessId });
       scheduleEditor.querySelector(".schedule-message").textContent = "Jadwal diperbarui.";
       hideScheduleEditor();
-      await load();
+      await loadAll();
     } catch (updateError) { error.textContent = updateError.message; }
     finally { restore(); }
   });
@@ -388,10 +417,10 @@ export async function openScheduleManager({ profile, onClose }) {
       if (!window.confirm("Hapus jadwal ini?")) return;
       const restore = setBusy(deleteButton, "Menghapus...");
       try {
-        await deleteScheduleAssignment({ organizationId, businessId, scheduleId: deleteButton.dataset.scheduleDelete });
-        logAuditSafe({ profile, action: "schedule_deleted", targetType: "schedule", targetId: deleteButton.dataset.scheduleDelete, businessId });
+        await deleteScheduleAssignment({ organizationId, businessId: assignmentBusinessId, scheduleId: deleteButton.dataset.scheduleDelete });
+        logAuditSafe({ profile, action: "schedule_deleted", targetType: "schedule", targetId: deleteButton.dataset.scheduleDelete, businessId: assignmentBusinessId });
         if (editingScheduleId === deleteButton.dataset.scheduleDelete) hideScheduleEditor();
-        await load();
+        await loadAll();
       } catch (deleteError) { scheduleEditor.querySelector(".schedule-error").textContent = deleteError.message; }
       finally { restore(); }
     }
