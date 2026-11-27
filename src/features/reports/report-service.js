@@ -36,7 +36,14 @@ function eachDate(from, to) {
 }
 
 function eventTime(event) {
+  if (!event) return "";
   return event.recordedTime || event.clientRecordedAt?.slice(11, 16) || "";
+}
+
+function previousDateKey(date) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() - 1);
+  return value.toISOString().slice(0, 10);
 }
 
 function inRange(date, from, to) {
@@ -120,6 +127,16 @@ export async function buildAttendanceReport({ profile, from, to, businessId, use
 
   const employees = [...new Map(employeeGroups.flat().map((employee) => [employee.id, employee])).values()];
   const attendance = attendanceGroups.flat();
+  const checkInDates = new Set(attendance
+    .filter((event) => event.type === "check-in")
+    .map((event) => `${event.userId}_${event.businessId || ""}_${event.workDate || event.attendanceDate}`));
+  const pairedCheckInDate = (event) => {
+    if (event.workDate || event.type !== "check-out") return null;
+    const ownKey = `${event.userId}_${event.businessId || ""}_${event.attendanceDate}`;
+    if (checkInDates.has(ownKey)) return null;
+    const previous = previousDateKey(event.attendanceDate);
+    return checkInDates.has(`${event.userId}_${event.businessId || ""}_${previous}`) ? previous : null;
+  };
   const schedules = scheduleGroups.flat();
   const shifts = new Map(shiftGroups.flat().map((shift) => [shift.id, shift]));
   const approvedOvertime = overtimeGroups.flat().filter((item) => item.status === "approved" && inRange(item.date, from, to));
@@ -136,7 +153,11 @@ export async function buildAttendanceReport({ profile, from, to, businessId, use
       const schedule = pickActiveSchedule(employeeSchedules, { businessId: scope, date }) || initialSchedule;
       if (businessId && scope !== businessId) return;
       const business = businessMap.get(scope) || { id: scope, name: "-" };
-      const events = attendance.filter((event) => (event.workDate || event.attendanceDate) === date && event.userId === employee.id && event.businessId === scope);
+      const events = attendance.filter((event) => {
+        if (event.userId !== employee.id || event.businessId !== scope) return false;
+        const paired = pairedCheckInDate(event);
+        return paired ? paired === date : (event.workDate || event.attendanceDate) === date;
+      });
       const overtime = approvedOvertime.filter((item) => item.userId === employee.id && (!item.businessId || item.businessId === scope) && item.date === date);
       const leaveRequest = approvedLeave.find((item) => item.userId === employee.id
         && (!item.businessId || item.businessId === scope)
