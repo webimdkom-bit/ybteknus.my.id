@@ -426,6 +426,7 @@ function getAttendanceDate(event) {
 }
 
 function getAttendanceTime(event) {
+  if (!event) return "";
   return event.recordedTime || event.clientRecordedAt?.slice(11, 16) || "";
 }
 

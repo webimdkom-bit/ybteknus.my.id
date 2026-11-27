@@ -46,6 +46,7 @@ function getEventDate(event) {
 }
 
 function getEventTime(event) {
+  if (!event) return "";
   return event.recordedTime || event.clientRecordedAt?.slice(11, 16) || "";
 }
 
