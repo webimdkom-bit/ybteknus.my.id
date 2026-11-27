@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 
 const attendanceApi = read("../../api/attendance.js");
-const attendanceReviewApi = read("../../api/attendance-review.js");
+const attendanceCorrectionApi = read("../../api/attendance-correction.js");
+const attendanceClientApi = read("../../src/features/attendance/attendance-api.js");
 const attendanceView = read("../../src/features/attendance/attendance-view.js");
 const requestView = read("../../src/features/requests/request-view.js");
 const reportService = read("../../src/features/reports/report-service.js");
@@ -30,12 +31,18 @@ describe("off-schedule attendance flow", () => {
     expect(attendanceApi).toContain("await batch.commit()");
   });
 
-  it("gates the review endpoint by membership permission and syncs attendance", () => {
-    expect(attendanceReviewApi).toContain('request.source !== "auto"');
-    expect(attendanceReviewApi).toContain("memberships");
-    expect(attendanceReviewApi).toContain('includes("manageOvertime")');
-    expect(attendanceReviewApi).toContain("reviewStatus: status");
-    expect(attendanceReviewApi).toContain("offschedule_reviewed");
+  it("gates the review action by membership permission and syncs attendance", () => {
+    expect(attendanceCorrectionApi).toContain('String(body.action || "").trim() === "review-offschedule"');
+    expect(attendanceCorrectionApi).toContain('request.source !== "auto"');
+    expect(attendanceCorrectionApi).toContain("memberships");
+    expect(attendanceCorrectionApi).toContain('includes("manageOvertime")');
+    expect(attendanceCorrectionApi).toContain("reviewStatus: status");
+    expect(attendanceCorrectionApi).toContain("offschedule_reviewed");
+  });
+
+  it("posts the review action to the existing correction function", () => {
+    expect(attendanceClientApi).toContain('post("/api/attendance-correction", { action: "review-offschedule", requestId, status, reviewNote })');
+    expect(attendanceClientApi).not.toContain("/api/attendance-review");
   });
 
   it("collects a reason in the UI and surfaces the auto overtime notice", () => {

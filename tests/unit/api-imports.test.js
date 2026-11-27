@@ -26,10 +26,9 @@ afterEach(() => {
 });
 
 describe("Vercel API handlers", () => {
-  it("has all 13 endpoints", () => {
+  it("has all 12 endpoints", () => {
     expect(handlers.sort()).toEqual([
       "attendance-correction.js",
-      "attendance-review.js",
       "attendance.js",
       "audit-log.js",
       "file-access.js",

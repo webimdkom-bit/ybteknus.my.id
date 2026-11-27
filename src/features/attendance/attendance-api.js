@@ -23,5 +23,5 @@ export function submitAttendanceCorrection(payload) {
 }
 
 export function submitAttendanceReview({ requestId, status, reviewNote }) {
-  return post("/api/attendance-review", { requestId, status, reviewNote });
+  return post("/api/attendance-correction", { action: "review-offschedule", requestId, status, reviewNote });
 }

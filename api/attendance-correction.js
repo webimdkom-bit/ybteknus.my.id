@@ -10,15 +10,74 @@ function fail(res, status, message) {
   return sendJson(res, status, { error: message });
 }
 
+async function reviewOffSchedule({ res, db, actor, body }) {
+  const requestId = String(body.requestId || "").trim();
+  const status = body.status === "approved" || body.status === "rejected" ? body.status : null;
+  const reviewNote = String(body.reviewNote || "").trim().slice(0, 500);
+  if (!requestId || !status) return fail(res, 400, "requestId dan status wajib valid.");
+
+  const requestRef = db.collection("requests").doc(requestId);
+  const snapshot = await requestRef.get();
+  if (!snapshot.exists) return fail(res, 404, "Pengajuan tidak ditemukan.");
+  const request = snapshot.data();
+  if (request.type !== "overtime" || request.source !== "auto") return fail(res, 400, "Bukan pengajuan lembur otomatis.");
+  if (request.organizationId !== actor.organizationId) return fail(res, 403, "Organisasi tidak sesuai.");
+  if (request.status !== "pending" && request.status !== status) return fail(res, 409, "Pengajuan sudah ditinjau dengan status lain.");
+
+  const businessId = request.businessId || null;
+  if (actor.role !== "owner") {
+    if (actor.role !== "admin") return fail(res, 403, "Tidak memiliki izin.");
+    if (!businessId || !(actor.businessIds || []).includes(businessId)) return fail(res, 403, "Bisnis di luar jangkauan.");
+    const membership = await db.collection("memberships").doc(`${actor.uid}_${businessId}`).get();
+    if (!membership.exists || !(membership.data().permissions || []).includes("manageOvertime")) {
+      return fail(res, 403, "Izin manageOvertime diperlukan.");
+    }
+  }
+
+  const attendanceIds = (request.attendanceIds || []).filter((id) => typeof id === "string" && id.trim());
+  const now = jakartaNow();
+  const batch = db.batch();
+  attendanceIds.forEach((id) => {
+    batch.update(db.collection("attendance").doc(id), {
+      reviewStatus: status,
+      reviewedBy: actor.uid,
+      reviewedAt: now,
+      reviewNote,
+      overtimeRequestStatus: status,
+      updatedAt: now,
+    });
+  });
+  batch.update(requestRef, { status, reviewedBy: actor.uid, reviewedAt: now, reviewNote, updatedAt: now });
+  batch.set(db.collection("auditLogs").doc(), {
+    actorId: actor.uid,
+    actorName: actor.displayName || actor.email || "",
+    actorRole: actor.role,
+    organizationId: actor.organizationId,
+    businessId,
+    action: "offschedule_reviewed",
+    targetType: "request",
+    targetId: requestId,
+    metadata: { status, attendanceIds: attendanceIds.length, workDate: request.workDate || request.overtimeDate || null },
+    timestamp: now,
+  });
+  await batch.commit();
+  return sendJson(res, 200, { requestId, status, reviewedAttendance: attendanceIds.length });
+}
+
 export default async function handler(req, res) {
   if (!requirePost(req, res)) return;
 
   const decoded = await verifyFirebaseToken(req.headers?.authorization).catch(() => null);
   const actor = await assertActiveActor(decoded?.uid);
   if (!actor) return fail(res, 401, "Unauthorized.");
-  if (!["owner", "admin"].includes(actor.role)) return fail(res, 403, "Tidak memiliki izin koreksi.");
 
   const body = parseBody(req);
+  const db = getFirestore(getAdminApp());
+  if (String(body.action || "").trim() === "review-offschedule") {
+    return reviewOffSchedule({ res, db, actor, body });
+  }
+  if (!["owner", "admin"].includes(actor.role)) return fail(res, 403, "Tidak memiliki izin koreksi.");
+
   const requestId = String(body.requestId || "").trim();
   const targetUserId = String(body.userId || "").trim();
   const businessId = String(body.businessId || "").trim();
@@ -32,7 +91,6 @@ export default async function handler(req, res) {
     return fail(res, 403, "Tidak memiliki izin koreksi pada bisnis ini.");
   }
 
-  const db = getFirestore(getAdminApp());
   const requestSnapshot = await db.collection("requests").doc(requestId).get();
   if (!requestSnapshot.exists) return fail(res, 404, "Pengajuan tidak ditemukan.");
   const request = requestSnapshot.data();
