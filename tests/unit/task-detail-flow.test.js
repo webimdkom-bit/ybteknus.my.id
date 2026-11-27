@@ -35,6 +35,20 @@ describe("task detail flow", () => {
     expect(view).toContain("Laporan tertulis wajib diisi.");
   });
 
+  it("locks the checklist after submission", () => {
+    expect(view).toContain('const locked = ["submitted", "approved"].includes(task.status)');
+    expect(view).toContain("const editable = started && !locked");
+    expect(view).toContain("Checklist terkunci setelah tugas disubmit.");
+  });
+
+  it("shows task evidence inline in the owner task modal", () => {
+    expect(view).toContain('data-report-photos="${report.id}"');
+    expect(view).toContain('photoViewer.className = "task-photo-viewer"');
+    expect(view).toContain('class="task-report-checklist"');
+    expect(view).toContain("ACC</button>");
+    expect(css).toContain(".task-photo-viewer[hidden]");
+  });
+
   it("uses an upload signature scoped to the checklist item", () => {
     expect(uploadApi).toContain("const checklistItemId = String(body.checklistItemId");
     expect(uploadApi).toContain("Item checklist tidak ditemukan pada tugas ini.");

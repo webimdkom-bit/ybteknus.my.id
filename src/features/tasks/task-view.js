@@ -39,6 +39,14 @@ export async function openTaskManager({ profile, context = null }) {
   const canCreateTask = profile.role === "owner" || (profile.memberships || []).some((membership) => membership.status !== "inactive" && (membership.permissions || []).includes("manageTasks"));
   overlay.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><div class="task-modal-head"><div><p class="eyebrow">WORK MANAGEMENT</p><h2 id="task-title">${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p></div><button class="icon-button task-close" aria-label="Tutup">×</button></div><div class="task-layout">${profile.role === "employee" || context || !canCreateTask ? "" : taskFormMarkup()}<div class="task-list-wrap"><div class="task-list-heading"><h3>Daftar tugas</h3><span class="task-count">0</span></div><div class="task-list-toolbar"><input class="task-list-search" type="search" placeholder="Cari tugas..." aria-label="Cari tugas" /><select class="task-list-view" aria-label="Filter tampilan"><option value="active">Aktif</option><option value="all">Semua</option><option value="completed">Selesai</option><option value="cancelled">Dibatalkan</option><option value="archived">Arsip</option></select><select class="task-list-status" aria-label="Filter status"><option value="">Semua status</option><option value="assigned">Assigned</option><option value="in-progress">In progress</option><option value="submitted">Submitted</option><option value="revision">Revision</option><option value="approved">Approved</option><option value="cancelled">Cancelled</option></select><select class="task-list-priority" aria-label="Filter prioritas"><option value="">Semua prioritas</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select><select class="task-list-business" aria-label="Filter bisnis"><option value="">Semua bisnis</option></select><select class="task-list-sort" aria-label="Urutkan"><option value="newest">Terbaru</option><option value="deadline">Deadline terdekat</option><option value="priority">Prioritas</option></select></div><p class="task-list-range" aria-live="polite"></p><div class="task-list-scroll"><div class="task-list"><p class="task-empty">Memuat tugas...</p></div></div><button class="secondary-button task-load-more" type="button" hidden>Muat lebih banyak</button></div></div></section>`;
   document.body.append(overlay);
+  const photoViewer = document.createElement("div");
+  photoViewer.className = "task-photo-viewer";
+  photoViewer.hidden = true;
+  photoViewer.innerHTML = `<div class="task-photo-viewer-inner"><button class="icon-button task-photo-close" aria-label="Tutup foto">×</button><div class="task-photo-list"></div></div>`;
+  overlay.append(photoViewer);
+  const hidePhotoViewer = () => { photoViewer.hidden = true; photoViewer.querySelector(".task-photo-list").innerHTML = ""; };
+  photoViewer.querySelector(".task-photo-close").addEventListener("click", hidePhotoViewer);
+  photoViewer.addEventListener("click", (event) => { if (event.target === photoViewer) hidePhotoViewer(); });
   let stopTaskWatch = null;
   let detailOverlay = null;
   const close = () => { detailOverlay?.remove(); detailOverlay = null; stopTaskWatch?.(); overlay.remove(); };
@@ -122,6 +130,8 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
     if (!task) { close(); return; }
     const checklist = task.checklistByUser?.[profile.uid] || task.checklist || [];
     const started = task.status !== "assigned";
+    const locked = ["submitted", "approved"].includes(task.status);
+    const editable = started && !locked;
     const allChecked = checklist.length ? checklist.every((item) => item.completed) : true;
     const photoRequired = task.evidenceRequired === "photo" && task.checklistPhotoEnabled;
     const photosOk = !photoRequired || checklist.every((item) => Boolean(item.evidenceFileId));
@@ -138,7 +148,7 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
         ${task.instructions ? `<p class="task-instructions"><strong>Instruksi:</strong> ${escapeHtml(task.instructions)}</p>` : ""}
         ${safeUrl(task.attachmentUrl) ? `<p><a href="${safeUrl(task.attachmentUrl)}" target="_blank" rel="noopener noreferrer">Lampiran tugas</a></p>` : ""}
         <h4>Checklist</h4>
-        ${checklist.length ? `<div class="task-detail-checklist">${checklist.map((item) => `<div class="task-detail-item"><label><input type="checkbox" data-detail-check="${item.id}" ${item.completed ? "checked" : ""} ${started ? "" : "disabled"} />${escapeHtml(item.label)}</label>${task.checklistPhotoEnabled ? `<div class="task-detail-item-evidence">${item.evidenceUrl && safeUrl(item.evidenceUrl) ? `<img src="${safeUrl(item.evidenceUrl)}" alt="Bukti ${escapeHtml(item.label)}" />` : ""}<button class="secondary-button" type="button" data-detail-upload="${item.id}" ${started ? "" : "disabled"}>${item.evidenceFileId ? "Ganti foto" : "Upload foto"}</button><input type="file" accept="image/*" hidden data-detail-file="${item.id}" /></div>` : ""}</div>`).join("")}</div>` : `<p class="task-empty">Tugas ini tidak memiliki checklist.</p>`}
+        ${checklist.length ? `<div class="task-detail-checklist">${checklist.map((item) => `<div class="task-detail-item"><label><input type="checkbox" data-detail-check="${item.id}" ${item.completed ? "checked" : ""} ${editable ? "" : "disabled"} />${escapeHtml(item.label)}</label>${task.checklistPhotoEnabled ? `<div class="task-detail-item-evidence">${item.evidenceUrl && safeUrl(item.evidenceUrl) ? `<img src="${safeUrl(item.evidenceUrl)}" alt="Bukti ${escapeHtml(item.label)}" />` : ""}<button class="secondary-button" type="button" data-detail-upload="${item.id}" ${editable ? "" : "disabled"}>${item.evidenceFileId ? "Ganti foto" : "Upload foto"}</button><input type="file" accept="image/*" hidden data-detail-file="${item.id}" /></div>` : ""}</div>`).join("")}</div>` : `<p class="task-empty">Tugas ini tidak memiliki checklist.</p>`}
         <div class="field"><label for="detail-report">Laporan pekerjaan ${writtenRequired ? "(wajib)" : "(opsional)"}</label><textarea id="detail-report" data-detail-report rows="4" placeholder="Tuliskan hasil pekerjaan Anda">${escapeHtml(report?.description || "")}</textarea></div>
         <p class="task-detail-message" role="status">${escapeHtml(message)}</p>
         <div class="task-detail-actions">
@@ -147,6 +157,7 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
           ${["completed", "revision"].includes(task.status) ? `<button class="primary-button" data-detail-submit ${canSubmit ? "" : "disabled"}>${task.status === "revision" ? "Kirim ulang tugas" : "Submit tugas"}</button>` : ""}
         </div>
         ${task.status === "in-progress" && !canComplete ? `<p class="field-hint">Centang semua checklist${photoRequired ? " dan unggah foto pada setiap item" : ""} sebelum menyelesaikan tugas.</p>` : ""}
+        ${locked ? `<p class="field-hint">Checklist terkunci setelah tugas disubmit. Jika diminta revisi, checklist dapat diubah kembali.</p>` : ""}
         ${report ? `<p class="field-hint">Laporan terakhir: ${escapeHtml(report.status)}${report.reviewNote ? ` · ${escapeHtml(report.reviewNote)}` : ""}</p>` : ""}
       </div>
     </section>`;
@@ -167,7 +178,7 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
 
     overlay.querySelectorAll("[data-detail-check]").forEach((checkbox) => checkbox.addEventListener("change", async () => {
       const current = snapshot().task;
-      if (!current || current.status === "assigned") return;
+      if (!current || current.status === "assigned" || ["submitted", "approved"].includes(current.status)) return;
       const source = current.checklistByUser?.[profile.uid] || current.checklist || [];
       const checklist = source.map((item) => item.id === checkbox.dataset.detailCheck ? { ...item, completed: checkbox.checked } : item);
       const completed = checklist.filter((item) => item.completed).length;
@@ -188,7 +199,7 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
       const file = input.files?.[0];
       const itemId = input.dataset.detailFile;
       const current = snapshot().task;
-      if (!file || !current || current.status === "assigned") return;
+      if (!file || !current || current.status === "assigned" || ["submitted", "approved"].includes(current.status)) return;
       const button = overlay.querySelector(`[data-detail-upload="${itemId}"]`);
       const restore = setBusy(button, "Mengunggah 0%");
       input.disabled = true;
@@ -483,9 +494,22 @@ function taskRow(task, tasks, reports, profile, canManage, canReviewReports, bus
 
 function reportRow(report, canReview = false) {
   const reviewActions = canReview && report.status === "submitted"
-    ? `<button class="approve-registration" data-report-action="approved" data-report-id="${report.id}" data-task-id="${report.taskId}">Approve</button><button class="reject-registration" data-report-action="revision" data-report-id="${report.id}" data-task-id="${report.taskId}">Revisi</button>`
+    ? `<button class="approve-registration" data-report-action="approved" data-report-id="${report.id}" data-task-id="${report.taskId}">ACC</button><button class="reject-registration" data-report-action="revision" data-report-id="${report.id}" data-task-id="${report.taskId}">Revisi</button>`
     : "";
-  return `<div class="task-report-row"><span>Laporan: ${escapeHtml(report.description)}</span>${safeUrl(report.evidenceUrl) ? `<a class="task-evidence-link" href="${safeUrl(report.evidenceUrl)}" target="_blank" rel="noopener noreferrer">Bukti</a>` : ""}${report.fileMetadataId ? `<button class="secondary-button" data-file-access="${report.fileMetadataId}">Buka aman</button>` : ""}<b>${report.status}</b>${reviewActions}</div>`;
+  const checklist = report.checklist || [];
+  const checklistMarkup = checklist.length
+    ? `<div class="task-report-checklist">${checklist.map((item) => `<span>${item.completed ? "✓" : "○"} ${escapeHtml(item.label)}</span>`).join("")}</div>`
+    : "";
+  const photos = checklist.map((item) => item.evidenceUrl).filter((url) => safeUrl(url)).map((url) => safeUrl(url));
+  const mainPhoto = safeUrl(report.evidenceUrl);
+  if (mainPhoto && !photos.includes(mainPhoto)) photos.unshift(mainPhoto);
+  const thumbnails = photos.length
+    ? `<div class="task-report-photos">${photos.map((url) => `<img src="${escapeHtml(url)}" alt="Bukti pekerjaan" />`).join("")}</div>`
+    : "";
+  const photoButton = photos.length || report.fileMetadataId
+    ? `<button class="secondary-button" type="button" data-report-photos="${report.id}">Cek foto</button>`
+    : "";
+  return `<div class="task-report-row"><div class="task-report-head"><span>Laporan: ${escapeHtml(report.description)}</span><b>${report.status}</b></div>${checklistMarkup}${thumbnails}<div class="task-report-actions">${photoButton}${report.fileMetadataId ? `<button class="secondary-button" data-file-access="${report.fileMetadataId}">Buka aman</button>` : ""}${reviewActions}</div></div>`;
 }
 
 async function syncParentProgress(parentId, tasks, profile) {
@@ -497,6 +521,24 @@ async function syncParentProgress(parentId, tasks, profile) {
 }
 
 function bindTaskActions(overlay, profile, tasks, reports, canManage, reload, focusTask) {
+  overlay.querySelectorAll("[data-report-photos]").forEach((button) => button.addEventListener("click", async () => {
+    const report = reports.find((item) => item.id === button.dataset.reportPhotos);
+    if (!report) return;
+    const urls = (report.checklist || []).map((item) => item.evidenceUrl).filter((url) => safeUrl(url)).map((url) => safeUrl(url));
+    const mainPhoto = safeUrl(report.evidenceUrl);
+    if (mainPhoto && !urls.includes(mainPhoto)) urls.unshift(mainPhoto);
+    if (!urls.length && report.fileMetadataId) {
+      try {
+        const result = await requestFileAccess(report.fileMetadataId);
+        if (result?.url) urls.push(result.url);
+      } catch (error) { window.alert(error.message); return; }
+    }
+    const list = overlay.querySelector(".task-photo-list");
+    list.innerHTML = urls.length
+      ? urls.map((url) => `<img src="${escapeHtml(url)}" alt="Bukti pekerjaan" />`).join("")
+      : `<p class="task-empty">Tidak ada foto pada laporan ini.</p>`;
+    overlay.querySelector(".task-photo-viewer").hidden = false;
+  }));
   overlay.querySelectorAll("[data-task-open]").forEach((button) => button.addEventListener("click", () => focusTask?.(button.dataset.taskOpen)));
   overlay.querySelectorAll("[data-task-action=\"start\"]").forEach((button) => button.addEventListener("click", async () => {
     await updateTaskAndDailyReports(button.dataset.taskId, { status: "in-progress" });
