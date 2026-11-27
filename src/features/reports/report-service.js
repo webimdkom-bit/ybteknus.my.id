@@ -61,6 +61,15 @@ function buildRow({ date, employee, business, shift, events, overtime = [], leav
   }
   if (!status && leaveRequest) status = leaveRequest.type === "leave" ? "cuti" : "izin";
   if (!status) status = inTime ? "belum lengkap" : "alpa";
+  const offSchedule = checkOut?.scheduleStatus === "unscheduled" || checkIn?.scheduleStatus === "unscheduled";
+  if (offSchedule) {
+    const review = checkOut?.reviewStatus || checkIn?.reviewStatus || "pending";
+    const detail = !checkOut ? "belum lengkap" : review === "approved" ? "disetujui" : review === "rejected" ? "ditolak" : "menunggu konfirmasi";
+    status = `di luar jadwal · ${detail}`;
+  }
+  const rejected = offSchedule && (checkOut?.reviewStatus === "rejected" || checkIn?.reviewStatus === "rejected");
+  const payableMinutes = rejected ? 0 : worked.payableMinutes;
+  const overtimeApprovedMinutes = rejected ? 0 : worked.overtimeApprovedMinutes;
   return {
     date,
     employeeId: employee.id,
@@ -79,9 +88,9 @@ function buildRow({ date, employee, business, shift, events, overtime = [], leav
     offsite: checkIn?.locationStatus === "offsite-approved" || checkOut?.locationStatus === "offsite-approved",
     corrected: Boolean(checkIn?.corrected || checkOut?.corrected),
     absoluteMinutes: worked.absoluteMinutes,
-    overtimeApprovedMinutes: worked.overtimeApprovedMinutes,
-    payableMinutes: worked.payableMinutes,
-    workedHours: hoursLabel(worked.payableMinutes),
+    overtimeApprovedMinutes,
+    payableMinutes,
+    workedHours: hoursLabel(payableMinutes),
   };
 }
 
@@ -127,7 +136,7 @@ export async function buildAttendanceReport({ profile, from, to, businessId, use
       const schedule = pickActiveSchedule(employeeSchedules, { businessId: scope, date }) || initialSchedule;
       if (businessId && scope !== businessId) return;
       const business = businessMap.get(scope) || { id: scope, name: "-" };
-      const events = attendance.filter((event) => event.attendanceDate === date && event.userId === employee.id && event.businessId === scope);
+      const events = attendance.filter((event) => (event.workDate || event.attendanceDate) === date && event.userId === employee.id && event.businessId === scope);
       const overtime = approvedOvertime.filter((item) => item.userId === employee.id && (!item.businessId || item.businessId === scope) && item.date === date);
       const leaveRequest = approvedLeave.find((item) => item.userId === employee.id
         && (!item.businessId || item.businessId === scope)

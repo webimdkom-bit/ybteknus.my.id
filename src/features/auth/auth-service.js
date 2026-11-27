@@ -62,6 +62,7 @@ export async function registerEmployee({ name, email, password, business, phone,
   notifySafe({ ...payload, audience: "owner" });
   notifySafe({ ...payload, audience: "admins", permission: "manageEmployees" });
 
+  await signOut(auth);
   return result.user;
 }
 

@@ -27,7 +27,7 @@ import { switchOrganization } from "./features/organization/organization-service
 import { syncDeadlineNotifications } from "./features/notifications/notification-service.js";
 import { logAuditSafe } from "./features/audit-trail/index.js";
 import { loadAdminDashboardData, loadOwnerDashboardData } from "./features/dashboard/dashboard-service.js";
-import { createOrganization, getBusiness, getOrganization, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, listOrganizationsForOwner, listTasksForUser, updateUserProfile } from "./lib/firestore/repositories.js";
+import { createOrganization, getBusiness, getOrganization, getShift, getUserProfile, listAttendance, listBusinessesForOrganization, listEmployeeSchedules, listMembershipsForUser, listOrganizationsForOwner, listTasksForUser, updateUserProfile, watchUserProfile } from "./lib/firestore/repositories.js";
 import { formatInAppZone, getDateKey, getGreeting } from "./lib/utils/time.js";
 import { setRegionBusy } from "./lib/utils/html.js";
 import { pickActiveSchedule } from "./features/schedules/schedule-calculations.js";
@@ -36,6 +36,7 @@ import { createIcons, Menu, X, ChevronDown, Bell, LayoutDashboard, Building2, Us
 
 const app = document.querySelector("#app");
 const auditedLogins = new Set();
+let stopStatusWatcher = null;
 const activityFilters = [
   { value: "all", label: "Semua aktivitas" },
   { value: "done", label: "Selesai" },
@@ -394,9 +395,22 @@ async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
     const todayAttendance = attendance.filter((event) => event.businessId === businessId && getAttendanceDate(event) === today).sort((a, b) => getAttendanceTime(a).localeCompare(getAttendanceTime(b)));
     const checkIn = todayAttendance.find((event) => event.type === "check-in");
     const checkOut = todayAttendance.find((event) => event.type === "check-out");
-    statusElement.textContent = checkOut ? checkOut.attendanceStatus || "Tercatat" : checkIn ? "Sudah check-in" : "Belum check-in";
+    const offScheduleLabel = (event, complete) => {
+      const review = event.reviewStatus || "pending";
+      return `di luar jadwal · ${!complete ? "belum lengkap" : review === "approved" ? "disetujui" : review === "rejected" ? "ditolak" : "menunggu konfirmasi"}`;
+    };
+    statusElement.textContent = checkOut
+      ? (checkOut.scheduleStatus === "unscheduled" ? offScheduleLabel(checkOut, true) : checkOut.attendanceStatus || "Tercatat")
+      : checkIn
+        ? (checkIn.scheduleStatus === "unscheduled" ? `Sudah check-in · ${offScheduleLabel(checkIn, false)}` : "Sudah check-in")
+        : "Belum check-in";
     const history = attendance.filter((event) => event.businessId === businessId).sort((a, b) => `${getAttendanceDate(b)}${getAttendanceTime(b)}`.localeCompare(`${getAttendanceDate(a)}${getAttendanceTime(a)}`)).slice(0, 8);
-    historyElement.innerHTML = history.length ? history.map((event) => `<div class="employee-history-row"><div><strong>${event.type === "check-in" ? "Check-in" : "Check-out"}</strong><span>${formatDateLabel(getAttendanceDate(event))} · ${getAttendanceTime(event) || "waktu tersimpan"}</span></div><b>${escapeHtml(event.attendanceStatus || "tercatat")}</b></div>`).join("") : "<div class=\"role-empty-state\"><strong>Belum ada riwayat.</strong><span>Aktivitas check-in dan check-out Anda akan tampil di sini.</span></div>";
+    historyElement.innerHTML = history.length ? history.map((event) => {
+      const rowStatus = event.scheduleStatus === "unscheduled"
+        ? offScheduleLabel(event, event.type === "check-out")
+        : event.attendanceStatus || "tercatat";
+      return `<div class="employee-history-row"><div><strong>${event.type === "check-in" ? "Check-in" : "Check-out"}</strong><span>${formatDateLabel(getAttendanceDate(event))} · ${getAttendanceTime(event) || "waktu tersimpan"}</span></div><b>${escapeHtml(rowStatus)}</b></div>`;
+    }).join("") : "<div class=\"role-empty-state\"><strong>Belum ada riwayat.</strong><span>Aktivitas check-in dan check-out Anda akan tampil di sini.</span></div>";
   } catch (error) {
     scheduleElement.innerHTML = `<strong>Data belum tersedia.</strong><span>${escapeHtml(error.message)}</span>`;
     historyElement.innerHTML = `<div class="role-empty-state"><strong>Riwayat gagal dimuat.</strong><span>${escapeHtml(error.message)}</span></div>`;
@@ -443,7 +457,7 @@ function applyDashboardData(viewModel) {
   setText("[data-dashboard-date]", formatDateLabel(viewModel.dateKey || selectedDateKey));
   setText("[data-dashboard-eyebrow]", viewModel.generatedAt.toUpperCase());
   setText("[data-metric-attendance]", `${metrics.attendancePercent}%`);
-  setText("[data-metric-attendance-foot]", `${metrics.attendanceHadir} orang hadir · ${metrics.late} terlambat · ${metrics.alpa} alpa`);
+  setText("[data-metric-attendance-foot]", `${metrics.attendanceHadir} orang hadir · ${metrics.late} terlambat · ${metrics.alpa} alpa${metrics.unscheduled ? ` · ${metrics.unscheduled} di luar jadwal` : ""}`);
   setText("[data-metric-people]", metrics.people);
   setText("[data-metric-people-foot]", `${metrics.businesses} bisnis`);
   setText("[data-metric-tasks]", metrics.runningTasks);
@@ -617,56 +631,77 @@ async function wireBusinessSwitcher(profile, onScopeChange) {
   }
 }
 
-function renderPendingState(profile) {
+function stopProfileStatusWatcher() {
+  stopStatusWatcher?.();
+  stopStatusWatcher = null;
+}
+
+function renderPendingState(profile, onApproved) {
+  stopProfileStatusWatcher();
   app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><div class="brand-mark">YB</div><p class="eyebrow">REGISTRATION RECEIVED</p><h1>Almost<br><em>there.</em></h1><p>Halo ${profile?.displayName || ""}, pendaftaran Anda sedang menunggu persetujuan Owner. Anda akan dapat masuk setelah status akun disetujui.</p><button class="primary-button" data-sign-out>Keluar dari akun</button></section></main>`;
   app.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
+  stopStatusWatcher = watchUserProfile(profile.uid, (fresh) => {
+    if (fresh.status === "active") {
+      stopProfileStatusWatcher();
+      onApproved?.(fresh);
+    } else if (fresh.status === "inactive" || fresh.status === "suspended") {
+      renderInactiveState();
+    }
+  });
 }
 
 function renderInactiveState() {
+  stopProfileStatusWatcher();
   app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><div class="brand-mark">YB</div><p class="eyebrow">ACCESS REMOVED</p><h1>No longer<br><em>active.</em></h1><p>Akses Owner Anda sudah dinonaktifkan. Hubungi Owner aktif perusahaan jika ini tidak sesuai.</p><button class="primary-button" data-sign-out>Kembali ke login</button></section></main>`;
   app.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
 }
 
+async function resolveSession(profile) {
+  stopProfileStatusWatcher();
+  if (profile.status === "inactive" || profile.status === "suspended") {
+    renderInactiveState();
+    return;
+  }
+  if (profile.role === "admin") {
+    try {
+      const memberships = await listMembershipsForUser(profile.uid, profile.organizationId);
+      const activeMemberships = memberships.filter((item) => item.status !== "inactive");
+      profile.memberships = activeMemberships;
+      const businessIds = [...new Set(activeMemberships.map((item) => item.businessId))];
+      const permissions = [...new Set(activeMemberships.flatMap((item) => item.permissions || []))];
+      const stale = JSON.stringify(businessIds) !== JSON.stringify(profile.businessIds || [])
+        || JSON.stringify(permissions) !== JSON.stringify(profile.permissions || []);
+      if (stale) await updateUserProfile(profile.uid, { businessIds, permissions });
+      profile.businessIds = businessIds;
+      profile.permissions = permissions;
+    } catch (syncError) { console.warn("[auth] admin access sync:", syncError?.message || syncError); }
+  }
+  if (profile.status !== "active") {
+    renderPendingState(profile, (fresh) => resolveSession(fresh));
+    return;
+  }
+  if (!auditedLogins.has(profile.uid)) {
+    auditedLogins.add(profile.uid);
+    logAuditSafe({ profile, action: "login", targetType: "user", targetId: profile.uid });
+  }
+  renderDashboard(profile);
+}
+
 subscribeToAuth(async (user) => {
+  stopProfileStatusWatcher();
   if (!user) {
     stopNotificationBadges();
-    renderAuthScreen(app);
+    renderAuthScreen(app, { onAuthenticated: resolveSession });
     return;
   }
   stopBusinessWatcher();
   try {
     const profile = await getUserProfile(user.uid);
     if (!profile) {
-      renderAuthScreen(app);
+      renderAuthScreen(app, { onAuthenticated: resolveSession });
       return;
     }
-    if (profile.status === "inactive" || profile.status === "suspended") {
-      renderInactiveState();
-      return;
-    }
-    if (profile.role === "admin") {
-      try {
-        const memberships = await listMembershipsForUser(profile.uid, profile.organizationId);
-        const activeMemberships = memberships.filter((item) => item.status !== "inactive");
-        profile.memberships = activeMemberships;
-        const businessIds = [...new Set(activeMemberships.map((item) => item.businessId))];
-        const permissions = [...new Set(activeMemberships.flatMap((item) => item.permissions || []))];
-        const stale = JSON.stringify(businessIds) !== JSON.stringify(profile.businessIds || [])
-          || JSON.stringify(permissions) !== JSON.stringify(profile.permissions || []);
-        if (stale) await updateUserProfile(profile.uid, { businessIds, permissions });
-        profile.businessIds = businessIds;
-        profile.permissions = permissions;
-      } catch (syncError) { console.warn("[auth] admin access sync:", syncError?.message || syncError); }
-    }
-    if (profile.status !== "active") {
-      renderPendingState(profile);
-      return;
-    }
-    if (!auditedLogins.has(profile.uid)) {
-      auditedLogins.add(profile.uid);
-      logAuditSafe({ profile, action: "login", targetType: "user", targetId: profile.uid });
-    }
-    renderDashboard(profile);
+    await resolveSession(profile);
   } catch (error) {
     app.innerHTML = `<main class="auth-shell pending-shell"><section class="auth-card pending-card"><p class="eyebrow">WORKSPACE ERROR</p><h1>Could not<br><em>load.</em></h1><p>${escapeHtml(error.message)}</p><button class="primary-button" data-sign-out>Keluar</button></section></main>`;
     app.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());

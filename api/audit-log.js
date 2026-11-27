@@ -21,6 +21,7 @@ const ALLOWED_ACTIONS = new Set([
   "shift_created", "shift_updated", "shift_deleted", "schedule_assigned", "schedule_range_assigned", "schedule_updated", "schedule_deleted",
   "request_submitted", "request_approved", "request_rejected",
   "attendance_corrected", "attendance_recorded", "overtime_reviewed",
+  "offschedule_overtime_auto_created", "offschedule_reviewed",
 ]);
 const EMPLOYEE_ACTIONS = new Set([
   "login", "logout",

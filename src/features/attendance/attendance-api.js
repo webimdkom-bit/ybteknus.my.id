@@ -14,10 +14,14 @@ async function post(endpoint, payload) {
   return data;
 }
 
-export function submitAttendance({ businessId, type, latitude, longitude, accuracy }) {
-  return post("/api/attendance", { businessId, type, latitude, longitude, accuracy });
+export function submitAttendance({ businessId, type, latitude, longitude, accuracy, reason }) {
+  return post("/api/attendance", { businessId, type, latitude, longitude, accuracy, reason });
 }
 
 export function submitAttendanceCorrection(payload) {
   return post("/api/attendance-correction", payload);
+}
+
+export function submitAttendanceReview({ requestId, status, reviewNote }) {
+  return post("/api/attendance-review", { requestId, status, reviewNote });
 }

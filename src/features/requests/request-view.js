@@ -9,6 +9,7 @@ import { getBusiness } from "../../lib/firestore/repositories.js";
 import { logAuditSafe } from "../audit-trail/index.js";
 import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-service.js";
 import { applyAttendanceCorrection } from "../attendance-corrections/correction-service.js";
+import { submitAttendanceReview } from "../attendance/attendance-api.js";
 import { listAttendanceCorrectionsForUser, createOvertime, listOvertimeForUser, updateOvertime } from "../../lib/firestore/repositories.js";
 import { escapeHtml, setBusy } from "../../lib/utils/html.js";
 import { getJakartaISO } from "../../lib/utils/time.js";
@@ -26,7 +27,9 @@ function minutesBetween(start, end) {
   const [startHours, startMinutes] = String(start || "").split(":").map(Number);
   const [endHours, endMinutes] = String(end || "").split(":").map(Number);
   if (![startHours, startMinutes, endHours, endMinutes].every(Number.isFinite)) return 0;
-  return Math.max(0, (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes));
+  const endTotal = endHours * 60 + endMinutes;
+  const startTotal = startHours * 60 + startMinutes;
+  return Math.max(0, (endTotal < startTotal ? endTotal + 1440 : endTotal) - startTotal);
 }
 
 export async function openRequestManager({ profile }) {
@@ -175,6 +178,11 @@ async function setupRequestReview(overlay, profile, notice = "") {
             }
           } catch (overtimeError) { sideEffectErrors.push(`Lembur: ${overtimeError?.message || overtimeError}`); }
         }
+        if (request.source === "auto") {
+          try {
+            await submitAttendanceReview({ requestId: request.id, status: button.dataset.requestAction, reviewNote: reviewNote || "" });
+          } catch (reviewError) { sideEffectErrors.push(`Absen di luar jadwal: ${reviewError?.message || reviewError}`); }
+        }
         notifySafe({
           type: button.dataset.requestAction === "approved" ? NOTIFICATION_TYPES.requestApproved : NOTIFICATION_TYPES.requestRejected,
           title: button.dataset.requestAction === "approved" ? "Pengajuan disetujui" : "Pengajuan ditolak",
@@ -196,12 +204,16 @@ async function setupRequestReview(overlay, profile, notice = "") {
   } catch (error) { list.innerHTML = `<p class="request-error">${error.message}</p>`; }
 }
 
+function autoRequestBadge(request) {
+  return request.source === "auto" ? `<em class="request-auto-badge">AUTO · di luar jadwal · ${Number(request.durationMinutes) || 0} menit</em>` : "";
+}
+
 function requestRow(request) {
   const label = REQUEST_TYPES.find(([value]) => value === request.type)?.[1] || request.type;
-  return `<article class="request-row"><div class="request-row-mark">${label.slice(0, 1)}</div><div><strong>${label}</strong><span>${request.startDate} – ${request.endDate}</span><small>${escapeHtml(request.reason)}</small></div><b class="request-status ${request.status}">${request.status}</b></article>`;
+  return `<article class="request-row"><div class="request-row-mark">${label.slice(0, 1)}</div><div><strong>${label}</strong><span>${request.startDate} – ${request.endDate}</span>${autoRequestBadge(request)}<small>${escapeHtml(request.reason)}</small></div><b class="request-status ${request.status}">${request.status}</b></article>`;
 }
 
 function reviewRequestRow(request) {
   const label = REQUEST_TYPES.find(([value]) => value === request.type)?.[1] || request.type;
-  return `<article class="request-row"><div class="request-row-mark">${label.slice(0, 1)}</div><div><strong>${label}</strong><span>${escapeHtml(request.startDate)} – ${escapeHtml(request.endDate)} · ${escapeHtml(request.businessId)}</span><small>${escapeHtml(request.reason)}</small></div><div class="request-actions"><button class="approve-registration" data-request-action="approved" data-request-id="${request.id}">Setujui</button><button class="reject-registration" data-request-action="rejected" data-request-id="${request.id}">Tolak</button></div><p class="request-error" role="alert"></p></article>`;
+  return `<article class="request-row"><div class="request-row-mark">${label.slice(0, 1)}</div><div><strong>${label}</strong><span>${escapeHtml(request.startDate)} – ${escapeHtml(request.endDate)} · ${escapeHtml(request.businessId)}</span>${autoRequestBadge(request)}<small>${escapeHtml(request.reason)}</small></div><div class="request-actions"><button class="approve-registration" data-request-action="approved" data-request-id="${request.id}">Setujui</button><button class="reject-registration" data-request-action="rejected" data-request-id="${request.id}">Tolak</button></div><p class="request-error" role="alert"></p></article>`;
 }

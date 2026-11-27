@@ -65,8 +65,13 @@ function countAttendance(events, expectedUserIds) {
   let hadir = 0;
   let late = 0;
   let incomplete = 0;
+  let unscheduled = 0;
   byUser.forEach(({ event }) => {
     const status = event.attendanceStatus || (event.type === "check-in" ? "belum lengkap" : "tercatat");
+    if (event.scheduleStatus === "unscheduled") {
+      unscheduled += 1;
+      return;
+    }
     if (PRESENT_STATUSES.has(status)) hadir += 1;
     if (LATE_STATUSES.has(status)) late += 1;
     if (status === "belum lengkap") incomplete += 1;
@@ -76,7 +81,7 @@ function countAttendance(events, expectedUserIds) {
   const withEvent = byUser.size;
   const alpa = Math.max(0, expected - withEvent);
   const percent = expected ? Math.round((hadir / expected) * 100) : 0;
-  return { hadir, late, incomplete, alpa, expected, percent };
+  return { hadir, late, incomplete, unscheduled, alpa, expected, percent };
 }
 
 function countTasks(tasks, reports, today) {
@@ -181,7 +186,6 @@ function buildRecentActivity({ tasks, reports, requests, registrations, business
 
 function buildViewModel({ businesses, employees, attendanceToday, attendanceWeek, schedulesToday, schedulesWeek, registrations, requests, tasks, reports, today }) {
   const expectedToday = new Set(schedulesToday.filter((schedule) => isScheduleEffective(schedule, today)).map((schedule) => schedule.userId));
-  if (!expectedToday.size) employees.forEach((employee) => expectedToday.add(employee.id));
   const attendance = countAttendance(attendanceToday, expectedToday);
   const taskSummary = countTasks(tasks, reports, today);
   const pendingRequests = requests.filter((request) => request.status === "pending");
@@ -195,6 +199,7 @@ function buildViewModel({ businesses, employees, attendanceToday, attendanceWeek
       attendanceHadir: attendance.hadir,
       late: attendance.late,
       alpa: attendance.alpa,
+      unscheduled: attendance.unscheduled,
       people: employees.length,
       businesses: businesses.filter((business) => business.status !== "inactive").length,
       runningTasks: taskSummary.running,

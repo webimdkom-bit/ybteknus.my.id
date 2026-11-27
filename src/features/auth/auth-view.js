@@ -1,14 +1,20 @@
 import { watchOpenBusinesses } from "../../lib/firestore/repositories.js";
 import { registerEmployee, resetPassword, signIn } from "./auth-service.js";
+import { escapeHtml } from "../../lib/utils/html.js";
 
 let unsubscribeBusinesses = null;
+let authNotice = "";
+
+export function setAuthNotice(message) {
+  authNotice = String(message || "").trim();
+}
 
 export function stopBusinessWatcher() {
   unsubscribeBusinesses?.();
   unsubscribeBusinesses = null;
 }
 
-export function renderAuthScreen(app) {
+export function renderAuthScreen(app, { onAuthenticated } = {}) {
   stopBusinessWatcher();
   app.innerHTML = `
     <main class="auth-shell">
@@ -32,6 +38,7 @@ export function renderAuthScreen(app) {
           <div class="field field-register"><label for="auth-password-confirmation">Konfirmasi password</label><div class="password-control"><input id="auth-password-confirmation" name="passwordConfirmation" type="password" autocomplete="new-password" placeholder="Ulangi password" minlength="6" /><button class="password-toggle" type="button" data-password-toggle="auth-password-confirmation" aria-label="Lihat konfirmasi password" aria-pressed="false">Lihat</button></div></div>
           <div class="field field-register"><label for="auth-business">Pilih bisnis</label><select id="auth-business" name="businessId" required><option value="">Memuat bisnis aktif...</option></select></div>
           <p class="auth-error" id="auth-error" role="alert"></p>
+          ${authNotice ? `<p class="auth-notice" role="status">${escapeHtml(authNotice)}</p>` : ""}
           <button class="primary-button auth-submit" type="submit"><span id="auth-submit-label">Masuk</span><span class="button-arrow">→</span></button>
         </form>
         <p class="auth-footer">Dengan melanjutkan, Anda menyetujui kebijakan akses internal perusahaan.</p>
@@ -108,6 +115,10 @@ export function renderAuthScreen(app) {
     error.textContent = "";
     error.classList.remove("is-success");
     const data = Object.fromEntries(new FormData(form));
+    if (mode === "login") {
+      setAuthNotice("");
+      app.querySelector(".auth-notice")?.remove();
+    }
     if (mode === "register" && data.password !== data.passwordConfirmation) {
       error.textContent = "Konfirmasi password tidak sama.";
       return;
@@ -120,15 +131,26 @@ export function renderAuthScreen(app) {
     submit.disabled = true;
     submit.querySelector("#auth-submit-label").textContent = "Memproses...";
     try {
-      if (mode === "login") await signIn(data.email, data.password);
+      if (mode === "login") {
+        const profile = await signIn(data.email, data.password);
+        if (typeof onAuthenticated === "function" && app.querySelector("#auth-form")) {
+          await onAuthenticated(profile);
+        }
+      }
       if (mode === "register") {
         const businesses = JSON.parse(businessSelect.dataset.businesses || "[]");
         const business = businesses.find((item) => item.id === data.businessId);
         if (!business) throw new Error("Pilih bisnis tujuan terlebih dahulu.");
+        setAuthNotice("Pendaftaran berhasil. Akun Anda menunggu persetujuan Owner.");
         await registerEmployee({ ...data, business });
+      }
+      if (app.querySelector("#auth-form")) {
+        submit.disabled = false;
+        submit.querySelector("#auth-submit-label").textContent = mode === "login" ? "Masuk" : "Kirim pendaftaran";
       }
     } catch (submissionError) {
       error.textContent = humanizeAuthError(submissionError);
+      if (mode === "register") setAuthNotice("");
       submit.disabled = false;
       submit.querySelector("#auth-submit-label").textContent = mode === "login" ? "Masuk" : "Kirim pendaftaran";
     }

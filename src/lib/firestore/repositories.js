@@ -50,6 +50,15 @@ export async function getUserProfile(uid) {
   return snapshot.exists() ? { id: snapshot.id, uid: snapshot.id, ...snapshot.data() } : null;
 }
 
+export function watchUserProfile(uid, callback, onError) {
+  return onSnapshot(doc(db, COLLECTIONS.USERS, uid), (snapshot) => {
+    if (snapshot.exists()) callback({ id: snapshot.id, uid: snapshot.id, ...snapshot.data() });
+  }, (error) => {
+    console.warn("[auth] profile listener:", error?.code || error?.message || error);
+    onError?.(error);
+  });
+}
+
 export async function listOwners(organizationId) {
   const result = await getDocs(query(
     collection(db, COLLECTIONS.USERS),

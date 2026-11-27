@@ -65,6 +65,8 @@ export async function openAttendancePanel({ profile }) {
       <div class="gps-status"><div class="gps-orb">GPS</div><div><strong>Location check</strong><span>Pastikan izin lokasi browser aktif.</span></div></div>
       <div class="attendance-action-grid"><button class="primary-button" data-attendance-type="check-in">Check-in <span>→</span></button><button class="secondary-button" data-attendance-type="check-out">Check-out <span>→</span></button></div>
       <div class="attendance-report-actions"><button class="text-button" data-attendance-daily-report>Buka laporan harian</button></div>
+      <label class="attendance-reason"><span>Keterangan (wajib jika di luar jadwal)</span><textarea data-attendance-reason rows="2" placeholder="Contoh: Membantu persiapan event pelanggan"></textarea></label>
+      <p class="attendance-notice" hidden></p>
       <p class="attendance-result" role="status">Belum ada aktivitas hari ini.</p><p class="attendance-error" role="alert"></p>
     </section>
   `;
@@ -73,6 +75,9 @@ export async function openAttendancePanel({ profile }) {
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
   const attendanceButtons = overlay.querySelectorAll("[data-attendance-type]");
   const result = overlay.querySelector(".attendance-result");
+  const notice = overlay.querySelector(".attendance-notice");
+  const reasonInput = overlay.querySelector("[data-attendance-reason]");
+  let unscheduledCheckIn = false;
   const refreshAttendanceState = async () => {
     if (!businessId) {
       attendanceButtons.forEach((button) => { button.disabled = true; });
@@ -85,6 +90,12 @@ export async function openAttendancePanel({ profile }) {
         getDailyReport(profile.uid, getDateKey()),
       ]);
       const reportReady = isDailyReportReady(dailyReport?.status);
+      unscheduledCheckIn = dailyAttendance.checkIn?.scheduleStatus === "unscheduled";
+      notice.hidden = !unscheduledCheckIn;
+      notice.textContent = dailyAttendance.checkIn?.reviewStatus === "pending"
+        ? "Absen di luar jadwal. Pengajuan lembur otomatis menunggu konfirmasi Owner/Admin."
+        : "Tidak ada jadwal hari ini. Absen akan dicatat sebagai di luar jadwal dan perlu konfirmasi.";
+      if (!reasonInput.value && dailyAttendance.checkIn?.reason) reasonInput.value = dailyAttendance.checkIn.reason;
       const checkInButton = overlay.querySelector('[data-attendance-type="check-in"]');
       const checkOutButton = overlay.querySelector('[data-attendance-type="check-out"]');
       checkInButton.disabled = Boolean(dailyAttendance.checkIn);
@@ -103,12 +114,27 @@ export async function openAttendancePanel({ profile }) {
     const type = button.dataset.attendanceType;
     error.textContent = "";
     if (!businessId) { error.textContent = "Akun Anda belum memiliki bisnis aktif."; return; }
+    const reason = reasonInput.value.trim();
+    if (type === "check-out" && unscheduledCheckIn && !reason) {
+      error.textContent = "Isi keterangan untuk absen di luar jadwal.";
+      return;
+    }
     const restoreButtons = [...attendanceButtons].map((item) => setBusy(item, item === button ? "Memproses absensi..." : "Menunggu..."));
     result.textContent = `${type === "check-in" ? "Check-in" : "Check-out"}: mencari lokasi dan menyimpan data...`;
     try {
-      const attendance = await recordGpsAttendance({ userId: profile.uid, organizationId: profile.organizationId, businessId, type });
-      result.textContent = `${attendance.type === "check-in" ? "Check-in" : "Check-out"} berhasil. Jarak Anda ${attendance.distanceMeters}m dari titik kantor.`;
+      const attendance = await recordGpsAttendance({ userId: profile.uid, organizationId: profile.organizationId, businessId, type, reason });
+      const overtimeNote = attendance.autoOvertime
+        ? ` Pengajuan lembur otomatis (${attendance.autoOvertime.durationMinutes} menit) dibuat dan menunggu konfirmasi.`
+        : "";
+      result.textContent = `${attendance.type === "check-in" ? "Check-in" : "Check-out"} berhasil. Jarak Anda ${attendance.distanceMeters}m dari titik kantor.${overtimeNote}`;
       result.classList.add("is-success");
+      if (attendance.scheduleStatus === "unscheduled") {
+        unscheduledCheckIn = true;
+        notice.hidden = false;
+        notice.textContent = type === "check-in"
+          ? "Tidak ada jadwal hari ini. Absen akan dicatat sebagai di luar jadwal dan perlu konfirmasi."
+          : "Absen di luar jadwal. Pengajuan lembur otomatis menunggu konfirmasi Owner/Admin.";
+      }
     } catch (attendanceError) {
       error.textContent = attendanceError.message;
     } finally {

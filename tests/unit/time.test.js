@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { APP_TIME_ZONE, formatInAppZone, getDateKey, getGreeting, getJakartaISO, getJakartaMinutes, getTimeKey } from "../../src/lib/utils/time.js";
+import { minutesBetweenJakarta } from "../../server/shared/time.js";
 
 describe("Asia/Jakarta time helpers", () => {
   it("uses Asia/Jakarta regardless of host timezone", () => {
@@ -17,6 +18,19 @@ describe("Asia/Jakarta time helpers", () => {
     const formatted = formatInAppZone("2026-11-22T17:30:00Z", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
     expect(formatted).toContain("2026");
     expect(formatted).toMatch(/00[.:]30/);
+  });
+
+  it("computes same-day duration in minutes", () => {
+    expect(minutesBetweenJakarta("2026-11-28", "08:15", "2026-11-28", "17:30")).toBe(555);
+  });
+
+  it("handles a shift crossing midnight", () => {
+    expect(minutesBetweenJakarta("2026-11-28", "22:00", "2026-11-29", "01:15")).toBe(195);
+    expect(minutesBetweenJakarta("2026-11-28", "22:00", "2026-11-28", "01:15")).toBe(195);
+  });
+
+  it("rejects invalid clock values", () => {
+    expect(Number.isNaN(minutesBetweenJakarta("2026-11-28", "25:00", "2026-11-28", "17:30"))).toBe(true);
   });
 
   it("selects greeting by Jakarta wall-clock time", () => {

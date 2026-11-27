@@ -22,11 +22,11 @@ export async function saveBusinessLocation(businessId, location) {
   });
 }
 
-export async function recordGpsAttendance({ businessId, type }) {
+export async function recordGpsAttendance({ businessId, type, reason }) {
   if (!businessId || !["check-in", "check-out"].includes(type)) throw new Error("Data absensi belum lengkap.");
   const position = await getCurrentPosition();
   const { latitude, longitude, accuracy } = position.coords;
-  return submitAttendance({ businessId, type, latitude, longitude, accuracy });
+  return submitAttendance({ businessId, type, latitude, longitude, accuracy, reason });
 }
 
 export async function getDailyAttendance({ userId, businessId, date = getDateKey(new Date()) }) {
@@ -42,7 +42,7 @@ export async function getDailyAttendance({ userId, businessId, date = getDateKey
 }
 
 function getEventDate(event) {
-  return event.attendanceDate || event.clientRecordedAt?.slice(0, 10) || "";
+  return event.workDate || event.attendanceDate || event.clientRecordedAt?.slice(0, 10) || "";
 }
 
 function getEventTime(event) {
