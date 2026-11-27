@@ -21,11 +21,20 @@ describe("task list wiring", () => {
     expect(view).toContain("restoreTask(");
   });
 
-  it("lets employee and admin assignees complete tasks", () => {
-    expect(view).toContain('data-task-complete="${task.id}"');
+  it("opens a task detail modal for assignees", () => {
+    expect(view).toContain('data-task-open="${task.id}"');
+    expect(view).toContain("function openTaskDetail(");
+    expect(view).toContain("Buka tugas");
+  });
+
+  it("uses the ordered start-complete-submit status flow", () => {
+    expect(view).toContain("Mulai tugas");
     expect(view).toContain("Selesaikan tugas");
+    expect(view).toContain("Submit tugas");
+    expect(view).toContain('action: "task_started"');
     expect(view).toContain('action: "task_completed"');
-    expect(view).toContain('status: "submitted", progress: 100');
+    expect(view).toContain('{ status: "completed", progress: 100 }');
+    expect(audit).toContain('"task_started"');
     expect(audit).toContain('"task_completed"');
   });
 

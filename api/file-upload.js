@@ -16,6 +16,7 @@ export default async function handler(req, res) {
   const taskId = String(body.taskId || "").trim();
   const reportId = String(body.reportId || "").trim();
   const fileName = String(body.fileName || "").trim().slice(0, 120);
+  const checklistItemId = String(body.checklistItemId || "").trim().slice(0, 80);
   const resourceType = body.resourceType === "raw" ? "raw" : body.resourceType === "image" ? "image" : null;
   if ((!taskId && !reportId) || (taskId && reportId) || !fileName || !resourceType) {
     return sendJson(res, 400, { error: "taskId atau reportId, fileName, dan resourceType wajib diisi." });
@@ -35,11 +36,14 @@ export default async function handler(req, res) {
       || (task.assignedTo || []).includes(uid)
       || (actor.role === "admin" && actor.businessIds?.includes(task.businessId));
     if (!allowed) return sendJson(res, 403, { error: "Anda tidak ditugaskan pada tugas ini." });
+    if (checklistItemId && !(task.checklist || []).some((item) => item.id === checklistItemId)) {
+      return sendJson(res, 400, { error: "Item checklist tidak ditemukan pada tugas ini." });
+    }
 
-    const publicId = `evidence/${uid}/${taskId}/${fileName}`.replace(/[^a-zA-Z0-9/_-]/g, "_");
+    const publicId = `evidence/${uid}/${taskId}/${checklistItemId ? `${checklistItemId}/` : ""}${fileName}`.replace(/[^a-zA-Z0-9/_-]/g, "_");
     const folder = `tasks/${uid}`;
     const signature = await generateUploadSignature({ publicId, folder, resourceType });
-    return sendJson(res, 200, { ...signature, taskId, fileName });
+    return sendJson(res, 200, { ...signature, taskId, fileName, checklistItemId });
   }
 
   const reportSnapshot = await db.collection("dailyReports").doc(reportId).get();

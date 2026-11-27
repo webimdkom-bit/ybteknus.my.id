@@ -9,7 +9,7 @@ const ALLOWED_ACTIONS = new Set([
   "login", "logout",
   "employee_approved", "employee_rejected",
   "organization_created",
-  "task_created", "task_progress_updated", "task_completed", "task_cancelled", "subtask_created", "task_archived", "task_restored",
+  "task_created", "task_started", "task_progress_updated", "task_completed", "task_cancelled", "subtask_created", "task_archived", "task_restored",
   "report_submitted", "report_approved", "report_revision_requested",
   "daily_report_submitted", "daily_report_reviewed", "daily_report_revision_requested",
   "final_report_submitted", "final_report_resubmitted", "final_report_approved", "final_report_revision_requested",
@@ -25,7 +25,7 @@ const ALLOWED_ACTIONS = new Set([
 ]);
 const EMPLOYEE_ACTIONS = new Set([
   "login", "logout",
-  "request_submitted", "task_completed", "task_progress_updated",
+  "request_submitted", "task_started", "task_completed", "task_progress_updated",
   "report_submitted", "file_uploaded",
   "daily_report_submitted",
 ]);

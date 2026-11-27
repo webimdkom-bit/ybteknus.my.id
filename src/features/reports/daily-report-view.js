@@ -1,15 +1,24 @@
 import { getDateKey, getJakartaISO } from "../../lib/utils/time.js";
-import { escapeHtml, openWithBusy, setBusy } from "../../lib/utils/html.js";
+import { escapeHtml, openWithBusy, safeUrl, setBusy } from "../../lib/utils/html.js";
 import {
+  createTask,
   getBusiness,
   getDailyReport,
   listBusinessesForOrganization,
   listDailyReportsForOrganization,
+  listEmployeesForBusiness,
   listFilesForTarget,
+  listTaskReportsForBusiness,
+  listTaskReportsForOrganization,
   listTaskReportsForUser,
+  listTasksForBusiness,
+  listTasksForOrganization,
   listTasksForUser,
   reviewDailyReport,
+  reviewTaskReport,
   saveDailyReport,
+  syncDailyReportTask,
+  updateTaskAndDailyReports,
 } from "../../lib/firestore/repositories.js";
 import { DAILY_REPORT_STATUS, isDailyReportEditable, isDailyReportReady } from "../../lib/utils/daily-report.js";
 import { getDeadlineDate } from "../tasks/task-status.js";
@@ -187,6 +196,8 @@ async function renderOwnerMode(body, profile, adminMode = false) {
   let businessId = "";
   let term = "";
   let reports = [];
+  let taskReports = [];
+  let taskMap = new Map();
   let selected = null;
   let message = "";
   let error = "";
@@ -207,12 +218,20 @@ async function renderOwnerMode(body, profile, adminMode = false) {
       return true;
     });
     if (term) reports = reports.filter((item) => `${item.displayName || ""} ${item.email || ""} ${item.role || ""}`.toLowerCase().includes(term.toLowerCase()));
+    const reportGroups = await Promise.all(scopes.map((scope) => (adminMode
+      ? listTaskReportsForBusiness(profile.organizationId, scope)
+      : listTaskReportsForOrganization(profile.organizationId)).catch(() => [])));
+    taskReports = [...new Map(reportGroups.flat().map((item) => [item.id, item])).values()];
+    const taskGroups = await Promise.all(scopes.map((scope) => (adminMode
+      ? listTasksForBusiness(profile.organizationId, scope)
+      : listTasksForOrganization(profile.organizationId)).catch(() => [])));
+    taskMap = new Map(taskGroups.flat().map((task) => [task.id, task]));
     if (!selected || !reports.some((item) => item.id === selected.id)) selected = reports[0] || null;
     render();
   }
 
   function render() {
-    body.innerHTML = `<div class="daily-report-toolbar"><div class="field"><label for="daily-owner-date">Tanggal</label><input id="daily-owner-date" type="date" value="${reportDate}" /></div><div class="field"><label for="daily-owner-business">Bisnis</label><select id="daily-owner-business"><option value="">Semua bisnis</option>${businessOptions}</select></div><div class="field"><label for="daily-owner-search">Cari</label><input id="daily-owner-search" type="search" value="${escapeHtml(term)}" placeholder="Nama atau email" /></div></div><p class="daily-report-error">${escapeHtml(error)}</p><p class="daily-report-message">${escapeHtml(message)}</p><div class="daily-report-grid"><div class="daily-report-list"><div class="daily-report-section-head"><h3>Laporan ${escapeHtml(reportDate)}</h3><span>${reports.length} laporan</span></div>${reports.length ? reports.map((item) => `<button class="daily-report-row ${selected?.id === item.id ? "is-selected" : ""}" data-daily-report-select="${escapeHtml(item.id)}"><strong>${escapeHtml(item.displayName || item.email || "Karyawan")}</strong><span>${escapeHtml(item.role || "-")} · ${escapeHtml(STATUS_LABELS[item.status] || item.status)}</span><small>${escapeHtml(item.submittedAt ? formatDate(item.submittedAt) : "Belum dikirim")}</small></button>`).join("") : `<div class="role-empty-state"><strong>Belum ada laporan.</strong><span>Coba tanggal atau filter lain.</span></div>`}</div><div class="daily-report-detail">${selected ? renderDetail(selected, true) : `<div class="role-empty-state"><strong>Pilih laporan.</strong><span>Detail laporan akan tampil di sini.</span></div>`}</div></div>`;
+    body.innerHTML = `<div class="daily-report-toolbar"><div class="field"><label for="daily-owner-date">Tanggal</label><input id="daily-owner-date" type="date" value="${reportDate}" /></div><div class="field"><label for="daily-owner-business">Bisnis</label><select id="daily-owner-business"><option value="">Semua bisnis</option>${businessOptions}</select></div><div class="field"><label for="daily-owner-search">Cari</label><input id="daily-owner-search" type="search" value="${escapeHtml(term)}" placeholder="Nama atau email" /></div></div><p class="daily-report-error">${escapeHtml(error)}</p><p class="daily-report-message">${escapeHtml(message)}</p><div class="daily-report-grid"><div class="daily-report-list"><div class="daily-report-section-head"><h3>Laporan ${escapeHtml(reportDate)}</h3><span>${reports.length} laporan</span></div>${reports.length ? reports.map((item) => `<button class="daily-report-row ${selected?.id === item.id ? "is-selected" : ""}" data-daily-report-select="${escapeHtml(item.id)}"><strong>${escapeHtml(item.displayName || item.email || "Karyawan")}</strong><span>${escapeHtml(item.role || "-")} · ${escapeHtml(STATUS_LABELS[item.status] || item.status)}</span><small>${escapeHtml(item.submittedAt ? formatDate(item.submittedAt) : "Belum dikirim")}</small></button>`).join("") : `<div class="role-empty-state"><strong>Belum ada laporan.</strong><span>Coba tanggal atau filter lain.</span></div>`}</div><div class="daily-report-detail">${selected ? renderDetail(selected, true, taskReports, taskMap) : `<div class="role-empty-state"><strong>Pilih laporan.</strong><span>Detail laporan akan tampil di sini.</span></div>`}</div></div>`;
     body.querySelector("#daily-owner-date").addEventListener("change", (event) => { reportDate = event.target.value || getDateKey(); selected = null; reload(); });
     body.querySelector("#daily-owner-business").addEventListener("change", (event) => { businessId = event.target.value; selected = null; reload(); });
     body.querySelector("#daily-owner-search").addEventListener("input", (event) => { term = event.target.value; selected = null; reload(); });
@@ -248,19 +267,113 @@ async function renderOwnerMode(body, profile, adminMode = false) {
         if (result?.url) window.open(result.url, "_blank", "noopener,noreferrer");
       } catch (fileError) { window.alert(fileError.message); }
     }));
+    body.querySelectorAll("[data-task-report-action]").forEach((button) => button.addEventListener("click", async () => {
+      const restore = setBusy(button, "Menyimpan...");
+      try {
+        const action = button.dataset.taskReportAction;
+        const note = window.prompt("Catatan review (opsional):", "") || "";
+        const reviewedAt = getJakartaISO();
+        await reviewTaskReport(button.dataset.taskReportId, { status: action, reviewedBy: profile.uid, reviewNote: note, reviewedAt });
+        await syncDailyReportTask({ taskId: button.dataset.taskId, reportId: button.dataset.taskReportId, reportStatus: action });
+        await updateTaskAndDailyReports(button.dataset.taskId, { status: action });
+        logAuditSafe({ profile, action: action === "approved" ? "report_approved" : "report_revision_requested", targetType: "taskReport", targetId: button.dataset.taskReportId, metadata: { taskId: button.dataset.taskId, reviewNote: note } });
+        const taskReport = taskReports.find((item) => item.id === button.dataset.taskReportId);
+        if (taskReport?.userId) {
+          notifySafe({
+            type: action === "approved" ? NOTIFICATION_TYPES.reportApproved : NOTIFICATION_TYPES.revisionRequested,
+            title: action === "approved" ? "Laporan tugas disetujui" : "Laporan tugas perlu revisi",
+            body: note || "",
+            organizationId: profile.organizationId,
+            businessId: taskReport.businessId,
+            targetType: "taskReport",
+            targetId: taskReport.id,
+            userIds: [taskReport.userId],
+          });
+        }
+        message = action === "approved" ? "Laporan tugas disetujui." : "Permintaan revisi dikirim.";
+        const selectedId = selected.id;
+        await reload();
+        selected = reports.find((item) => item.id === selectedId) || selected || null;
+        render();
+      } catch (reviewError) { error = reviewError.message; render(); }
+      finally { restore(); }
+    }));
+    body.querySelectorAll("[data-task-subtask-toggle]").forEach((button) => button.addEventListener("click", async () => {
+      const form = body.querySelector(`[data-task-subtask-form="${button.dataset.taskSubtaskToggle}"]`);
+      if (!form) return;
+      form.hidden = !form.hidden;
+      if (form.hidden) return;
+      const task = taskMap.get(button.dataset.taskSubtaskToggle);
+      const select = form.querySelector("[data-subtask-assignee]");
+      const employees = task ? await listEmployeesForBusiness(profile.organizationId, task.businessId).catch(() => []) : [];
+      select.innerHTML = employees.length
+        ? `<option value="">Pilih employee</option>${employees.map((employee) => `<option value="${employee.id}">${escapeHtml(employee.displayName || employee.email || "Tanpa nama")}</option>`).join("")}`
+        : `<option value="">Belum ada karyawan</option>`;
+    }));
+    body.querySelectorAll("[data-task-subtask-submit]").forEach((button) => button.addEventListener("click", async () => {
+      const form = body.querySelector(`[data-task-subtask-form="${button.dataset.taskSubtaskSubmit}"]`);
+      const parent = taskMap.get(button.dataset.taskSubtaskSubmit);
+      const title = form?.querySelector("[data-subtask-title]")?.value.trim();
+      const assigneeId = form?.querySelector("[data-subtask-assignee]")?.value;
+      if (!parent || !title || !assigneeId) { error = "Judul dan penerima subtugas wajib diisi."; render(); return; }
+      const restore = setBusy(button, "Menyimpan...");
+      try {
+        await createTask({
+          organizationId: profile.organizationId,
+          businessId: parent.businessId,
+          title,
+          description: "",
+          deadline: parent.deadline || "",
+          priority: parent.priority || "normal",
+          category: parent.category || "Umum",
+          reportFormat: parent.reportFormat || "written",
+          evidenceRequired: parent.evidenceRequired || "none",
+          checklistPhotoEnabled: false,
+          attachmentUrl: "",
+          parentTaskId: parent.id,
+          rootTaskId: parent.rootTaskId || parent.id,
+          assignedTo: [assigneeId],
+          assignedBy: profile.uid,
+          createdBy: profile.uid,
+          timeStatus: "pending",
+          checklist: [],
+          checklistByUser: { [assigneeId]: [] },
+          progressByUser: { [assigneeId]: 0 },
+        });
+        logAuditSafe({ profile, action: "subtask_created", targetType: "task", targetId: parent.id, businessId: parent.businessId, metadata: { title } });
+        notifySafe({ type: NOTIFICATION_TYPES.taskCreated, title: "Subtugas baru", body: title, organizationId: profile.organizationId, businessId: parent.businessId, targetType: "task", targetId: parent.id, userIds: [assigneeId] });
+        message = "Subtugas dibuat.";
+        await reload();
+      } catch (subtaskError) { error = subtaskError.message; render(); }
+      finally { restore(); }
+    }));
   }
 }
 
-function renderDetail(report, canReview = false) {
+function renderDetail(report, canReview = false, reports = [], taskMap = new Map()) {
   const reviewActions = canReview
     ? `<div class="daily-report-actions"><button class="secondary-button" type="button" data-daily-review="revision" ${report.status === DAILY_REPORT_STATUS.REVIEWED ? "disabled" : ""}>Minta revisi</button><button class="primary-button" type="button" data-daily-review="reviewed" ${report.status === DAILY_REPORT_STATUS.REVIEWED ? "disabled" : ""}>Tandai ditinjau</button></div>`
     : "";
-  return `<div class="daily-report-detail-head"><div><h3>${escapeHtml(report.displayName || report.email || "Karyawan")}</h3><p>${escapeHtml(report.role || "-")} · ${escapeHtml(reportDateLabel(report.reportDate))}</p></div><span class="daily-report-pill ${escapeHtml(report.status)}">${STATUS_LABELS[report.status] || report.status}</span></div>${report.reviewNote ? `<p class="daily-report-review-note"><strong>Catatan review:</strong> ${escapeHtml(report.reviewNote)}</p>` : ""}<h4>Catatan harian</h4><p class="daily-report-notes">${escapeHtml(report.notes || "-")}</p><h4>Tugas</h4>${renderTaskEntries(report.tasks || [])}<h4>Lampiran</h4>${renderAttachments(report.attachments || [])}${reviewActions}`;
+  return `<div class="daily-report-detail-head"><div><h3>${escapeHtml(report.displayName || report.email || "Karyawan")}</h3><p>${escapeHtml(report.role || "-")} · ${escapeHtml(reportDateLabel(report.reportDate))}</p></div><span class="daily-report-pill ${escapeHtml(report.status)}">${STATUS_LABELS[report.status] || report.status}</span></div>${report.reviewNote ? `<p class="daily-report-review-note"><strong>Catatan review:</strong> ${escapeHtml(report.reviewNote)}</p>` : ""}<h4>Catatan harian</h4><p class="daily-report-notes">${escapeHtml(report.notes || "-")}</p><h4>Tugas</h4>${renderTaskEntries(report.tasks || [], reports, taskMap, canReview)}<h4>Lampiran</h4>${renderAttachments(report.attachments || [])}${reviewActions}`;
 }
 
-function renderTaskEntries(entries) {
+function renderTaskEntries(entries, reports = [], taskMap = new Map(), canReview = false) {
   if (!entries.length) return `<div class="role-empty-state"><strong>Belum ada tugas.</strong><span>Tugas dengan deadline hari ini akan muncul otomatis.</span></div>`;
-  return entries.map((entry) => `<article class="daily-report-task"><div><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(getDeadlineDate(entry.deadline) || "-")} · progres ${Number(entry.progress || 0)}%</span></div><b class="task-status ${escapeHtml(entry.taskStatus || "assigned")}">${entry.completed ? "selesai" : escapeHtml(entry.taskStatus || "assigned")}</b>${entry.reportId ? `<small>Laporan tugas: ${escapeHtml(entry.reportStatus || "submitted")}</small>` : ""}</article>`).join("");
+  return entries.map((entry) => {
+    const report = reports.find((item) => item.id === entry.reportId);
+    const task = taskMap.get(entry.taskId);
+    const checklist = report?.checklist || [];
+    const checklistMarkup = checklist.length
+      ? `<div class="daily-report-checklist">${checklist.map((item) => `<div class="daily-report-check-item"><span>${item.completed ? "✓" : "○"} ${escapeHtml(item.label)}</span>${item.evidenceUrl && safeUrl(item.evidenceUrl) ? `<img src="${safeUrl(item.evidenceUrl)}" alt="Bukti ${escapeHtml(item.label)}" />` : ""}</div>`).join("")}</div>`
+      : "";
+    const reviewActions = canReview && report && report.status === "submitted"
+      ? `<div class="daily-report-task-actions"><button class="approve-registration" type="button" data-task-report-action="approved" data-task-report-id="${escapeHtml(report.id)}" data-task-id="${escapeHtml(entry.taskId)}">ACC</button><button class="reject-registration" type="button" data-task-report-action="revision" data-task-report-id="${escapeHtml(report.id)}" data-task-id="${escapeHtml(entry.taskId)}">Revisi</button></div>`
+      : "";
+    const subtaskActions = canReview && task
+      ? `<button class="secondary-button" type="button" data-task-subtask-toggle="${escapeHtml(entry.taskId)}">Buat subtugas</button><div class="daily-report-subtask-form" data-task-subtask-form="${escapeHtml(entry.taskId)}" hidden><input type="text" data-subtask-title placeholder="Judul subtugas" /><select data-subtask-assignee><option value="">Pilih employee</option></select><button class="primary-button" type="button" data-task-subtask-submit="${escapeHtml(entry.taskId)}">Buat subtugas</button></div>`
+      : "";
+    return `<article class="daily-report-task"><div><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(getDeadlineDate(entry.deadline) || "-")} · progres ${Number(entry.progress || 0)}%</span></div><b class="task-status ${escapeHtml(entry.taskStatus || "assigned")}">${entry.completed ? "selesai" : escapeHtml(entry.taskStatus || "assigned")}</b>${entry.reportId ? `<small>Laporan tugas: ${escapeHtml(entry.reportStatus || "submitted")}</small>` : ""}${report?.description ? `<p class="daily-report-task-report">${escapeHtml(report.description)}</p>` : ""}${checklistMarkup}<div class="daily-report-task-actions">${reviewActions}${subtaskActions}</div></article>`;
+  }).join("");
 }
 
 function renderAttachments(attachments) {

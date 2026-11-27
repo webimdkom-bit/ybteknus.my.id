@@ -21,8 +21,8 @@ async function post(endpoint, payload) {
   return data;
 }
 
-export async function requestUploadSignature({ taskId, fileName, resourceType }) {
-  return post("/api/file-upload", { taskId, fileName, resourceType });
+export async function requestUploadSignature({ taskId, fileName, resourceType, checklistItemId }) {
+  return post("/api/file-upload", { taskId, fileName, resourceType, checklistItemId });
 }
 
 export async function requestProfileUploadSignature(fileName) {
