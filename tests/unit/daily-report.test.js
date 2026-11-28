@@ -14,6 +14,7 @@ const correctionApi = read("../../api/attendance-correction.js");
 const audit = read("../../api/audit-log.js");
 const notifications = read("../../src/features/notifications/notification-service.js");
 const dailyView = read("../../src/features/reports/daily-report-view.js");
+const css = read("../../src/styles/main.css");
 const fileUploadApi = read("../../api/file-upload.js");
 const uploadService = read("../../src/features/files/file-upload-service.js");
 
@@ -100,5 +101,24 @@ describe("daily report wiring", () => {
   it("sends file metadata with the API publicId field", () => {
     expect(dailyView).toContain("publicId: signature.public_id");
     expect(dailyView).not.toContain("cloudinaryPublicId");
+  });
+
+  it("lets owners open employee evidence photos inline", () => {
+    expect(dailyView).toContain('photoViewer.className = "task-photo-viewer"');
+    expect(dailyView).toContain("data-daily-photo=");
+    expect(dailyView).toContain('body.querySelectorAll("[data-daily-photo]")');
+    expect(dailyView).toContain("data-daily-file-photo");
+    expect(dailyView).toContain("openPhotoViewer(result?.url ? [result.url] : [])");
+    expect(dailyView).toContain("Klik foto untuk melihat detailnya.");
+    expect(dailyView).toContain("const url = taskReport?.checklist?.[Number(itemIndex)]?.evidenceUrl;");
+    expect(css).toContain(".daily-report-check-item img { width: 72px;");
+  });
+
+  it("uses readable status labels and counts in owner review", () => {
+    expect(dailyView).toContain("TASK_STATUS_LABELS");
+    expect(dailyView).toContain('class="daily-report-pill ${escapeHtml(item.status)}"');
+    expect(dailyView).toContain("Tugas (${(report.tasks || []).length})");
+    expect(dailyView).toContain("Lampiran (${(report.attachments || []).length})");
+    expect(css).toContain(".daily-report-pill.draft");
   });
 });

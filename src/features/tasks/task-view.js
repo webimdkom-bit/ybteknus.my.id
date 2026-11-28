@@ -139,7 +139,9 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
     const canComplete = task.status === "in-progress" && allChecked && photosOk;
     const canSubmit = ["completed", "revision"].includes(task.status)
       && (!writtenRequired || Boolean(overlay.querySelector("[data-detail-report]")?.value.trim()));
-    const message = overlay.querySelector(".task-detail-message")?.textContent || "";
+    const messageElement = overlay.querySelector(".task-detail-message");
+    const message = messageElement?.textContent || "";
+    const messageTone = messageElement?.classList.contains("is-success") ? "is-success" : "";
 
     overlay.innerHTML = `<section class="task-detail-modal" role="dialog" aria-modal="true" aria-labelledby="task-detail-title">
       <div class="task-detail-head"><div><p class="eyebrow">TUGAS SAYA</p><h2 id="task-detail-title">${escapeHtml(task.title)}</h2><p>${escapeHtml(task.description || "")}</p></div><button class="icon-button task-detail-close" aria-label="Tutup">×</button></div>
@@ -150,7 +152,7 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
         <h4>Checklist</h4>
         ${checklist.length ? `<div class="task-detail-checklist">${checklist.map((item) => `<div class="task-detail-item"><label><input type="checkbox" data-detail-check="${item.id}" ${item.completed ? "checked" : ""} ${editable ? "" : "disabled"} />${escapeHtml(item.label)}</label>${task.checklistPhotoEnabled ? `<div class="task-detail-item-evidence">${item.evidenceUrl && safeUrl(item.evidenceUrl) ? `<img src="${safeUrl(item.evidenceUrl)}" alt="Bukti ${escapeHtml(item.label)}" />` : ""}<button class="secondary-button" type="button" data-detail-upload="${item.id}" ${editable ? "" : "disabled"}>${item.evidenceFileId ? "Ganti foto" : "Upload foto"}</button><input type="file" accept="image/*" hidden data-detail-file="${item.id}" /></div>` : ""}</div>`).join("")}</div>` : `<p class="task-empty">Tugas ini tidak memiliki checklist.</p>`}
         <div class="field"><label for="detail-report">Laporan pekerjaan ${writtenRequired ? "(wajib)" : "(opsional)"}</label><textarea id="detail-report" data-detail-report rows="4" placeholder="Tuliskan hasil pekerjaan Anda">${escapeHtml(report?.description || "")}</textarea></div>
-        <p class="task-detail-message" role="status">${escapeHtml(message)}</p>
+        <p class="task-detail-message ${messageTone}" role="status">${escapeHtml(message)}</p>
         <div class="task-detail-actions">
           ${task.status === "assigned" ? `<button class="primary-button" data-detail-start>Mulai tugas</button>` : ""}
           ${task.status === "in-progress" ? `<button class="primary-button" data-detail-complete ${canComplete ? "" : "disabled"}>Selesaikan tugas</button>` : ""}
@@ -163,7 +165,12 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
     </section>`;
 
     overlay.querySelector(".task-detail-close").addEventListener("click", close);
-    const setMessage = (text) => { const element = overlay.querySelector(".task-detail-message"); if (element) element.textContent = text; };
+    const setMessage = (text, tone = "") => {
+      const element = overlay.querySelector(".task-detail-message");
+      if (!element) return;
+      element.textContent = text;
+      element.classList.toggle("is-success", tone === "is-success");
+    };
 
     overlay.querySelector("[data-detail-start]")?.addEventListener("click", async () => {
       const current = snapshot().task;
@@ -247,6 +254,9 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
       if (writtenRequired && !description) { setMessage("Laporan tertulis wajib diisi."); return; }
       const checklist = current.checklistByUser?.[profile.uid] || current.checklist || [];
       const evidence = checklist.find((item) => item.evidenceUrl && safeUrl(item.evidenceUrl));
+      const submitButton = overlay.querySelector("[data-detail-submit]");
+      const restoreSubmit = setBusy(submitButton, "Mengirim tugas...");
+      setMessage("");
       try {
         let report = existing;
         if (report) {
@@ -272,8 +282,10 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
         if (parent) notifySafe({ ...notification, title: "Laporan tugas turunan dikirim", userIds: parent.assignedTo || [] });
         await updateTaskAndDailyReports(current.id, { status: "submitted" });
         await syncTimeStatus(current.id, getSnapshot().tasks, "submitted");
+        setMessage("Tugas berhasil disubmit. Menunggu review Owner/Admin.", "is-success");
         await refresh();
       } catch (error) { setMessage(error.message); }
+      finally { restoreSubmit(); }
     });
   }
 

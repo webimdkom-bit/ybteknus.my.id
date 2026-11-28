@@ -6,6 +6,20 @@ import { escapeHtml, setBusy } from "../../lib/utils/html.js";
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
+const formatRowDate = (value) => {
+  const date = new Date(`${value}T00:00:00+07:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+const reportStatusTone = (status) => {
+  const value = String(status || "").toLowerCase();
+  if (value === "alpa") return "alpa";
+  if (value.includes("terlambat") || value.includes("belum lengkap")) return "warning";
+  if (value.includes("izin") || value.includes("cuti") || value.includes("luar jadwal")) return "info";
+  if (value.includes("hadir") || value.includes("tercatat")) return "hadir";
+  return "netral";
+};
+
 export async function openReportViewer({ profile }) {
   const today = getDateKey(new Date());
   const monthStart = `${today.slice(0, 7)}-01`;
@@ -87,8 +101,8 @@ export async function openReportViewer({ profile }) {
   };
 
   const periodChips = (entries) => (entries.length
-    ? `<div class="report-chips">${entries.slice(0, 12).map((entry) => `<span class="report-chip">${escapeHtml(entry.label)} · ${escapeHtml(entry.labelHours)} · ${entry.days}h</span>`).join("")}${entries.length > 12 ? `<span class="report-chip">+${entries.length - 12} lagi</span>` : ""}</div>`
-    : `<span class="report-chip">Tidak ada data</span>`);
+    ? `<div class="report-chips">${entries.slice(0, 12).map((entry) => `<span class="report-chip">${escapeHtml(entry.label)} · ${escapeHtml(entry.labelHours)} · ${entry.days} hari</span>`).join("")}${entries.length > 12 ? `<span class="report-chip">+${entries.length - 12} lagi</span>` : ""}</div>`
+    : `<span class="report-chip">Tidak ada data pada periode ini</span>`);
 
   overlay.querySelectorAll("[data-report-preset]").forEach((button) => button.addEventListener("click", () => {
     if (button.dataset.reportPreset === "daily") {
@@ -125,21 +139,21 @@ export async function openReportViewer({ profile }) {
       current = report;
       const { summary: totals, rows, employeeSummaries } = report;
       summary.innerHTML = [
-        ["TOTAL DATA", totals.total],
-        ["KARYAWAN", totals.employees],
-        ["TOTAL JAM", totals.totalHoursLabel],
-        ["JAM ABSOLUT", totals.absoluteHoursLabel],
-        ["LEMBUR", totals.overtimeHoursLabel],
-        ["HADIR", totals.hadir],
-        ["TERLAMBAT", totals.terlambat],
-        ["ALPA", totals.alpa],
-      ].map(([label, value]) => `<div class="report-stat"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+        ["Total entri", totals.total],
+        ["Karyawan", totals.employees],
+        ["Total jam kerja", totals.totalHoursLabel],
+        ["Jam absolut", totals.absoluteHoursLabel],
+        ["Lembur disetujui", totals.overtimeHoursLabel],
+        ["Hadir", totals.hadir],
+        ["Terlambat", totals.terlambat],
+        ["Alpa", totals.alpa],
+      ].map(([label, value]) => `<div class="report-stat"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`).join("") + `<p class="report-help">Total jam kerja adalah jam yang dihitung untuk pembayaran. Jam absolut adalah selisih check-in dan check-out apa adanya.</p>`;
       employeeSummary.innerHTML = employeeSummaries.length
-        ? `<div class="report-employee-summary-head"><strong>Ringkasan per karyawan</strong><span>Klik baris untuk rincian hari, minggu, dan bulan</span></div>${employeeSummaries.map((item) => `<details class="report-summary-row"><summary><span>${escapeHtml(item.employee)}</span><span>${escapeHtml(item.business)}</span><span>${item.workedDays} hari</span><strong>${escapeHtml(item.totalHoursLabel)}</strong><span>Lembur ${escapeHtml(item.overtimeHoursLabel)}</span></summary><div class="report-summary-breakdown"><div><strong>Harian</strong>${periodChips(item.days)}</div><div><strong>Mingguan</strong>${periodChips(item.weeks)}</div><div><strong>Bulanan</strong>${periodChips(item.months)}</div></div></details>`).join("")}`
-        : "";
+        ? `<div class="report-employee-summary-head"><strong>Ringkasan per karyawan</strong><span>Klik nama karyawan untuk melihat rincian harian, mingguan, dan bulanan</span></div>${employeeSummaries.map((item) => `<details class="report-summary-row"><summary><span>${escapeHtml(item.employee)}</span><span>${escapeHtml(item.business)}</span><span>${item.workedDays} hari</span><strong>${escapeHtml(item.totalHoursLabel)}</strong><span>Lembur ${escapeHtml(item.overtimeHoursLabel)}</span></summary><div class="report-summary-breakdown"><div><strong>Harian</strong>${periodChips(item.days)}</div><div><strong>Mingguan</strong>${periodChips(item.weeks)}</div><div><strong>Bulanan</strong>${periodChips(item.months)}</div></div></details>`).join("")}`
+        : `<div class="role-empty-state"><strong>Belum ada ringkasan karyawan.</strong><span>Ringkasan akan muncul setelah laporan dimuat.</span></div>`;
       table.innerHTML = rows.length
-        ? `<table class="report-table"><thead><tr><th>Tanggal</th><th>Karyawan</th><th>Bisnis</th><th>Shift</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Telat</th><th>Total jam</th></tr></thead><tbody>${rows.slice(0, 100).map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.employee)}</td><td>${escapeHtml(row.business)}</td><td>${escapeHtml(row.shift)}</td><td>${escapeHtml(row.checkIn)}</td><td>${escapeHtml(row.checkOut)}</td><td>${escapeHtml(row.status)}</td><td>${row.lateMinutes}m</td><td>${escapeHtml(row.workedHours)}</td></tr>`).join("")}</tbody></table>${rows.length > 100 ? `<p class="report-note">Menampilkan 100 dari ${rows.length} baris. Ekspor untuk data lengkap.</p>` : ""}`
-        : `<div class="role-empty-state"><strong>Tidak ada data absensi.</strong><span>Coba periode atau filter lain.</span></div>`;
+        ? `<table class="report-table"><thead><tr><th>Tanggal</th><th>Karyawan</th><th>Bisnis</th><th>Shift</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Telat</th><th>Total jam</th></tr></thead><tbody>${rows.slice(0, 100).map((row) => `<tr><td>${escapeHtml(formatRowDate(row.date))}</td><td>${escapeHtml(row.employee)}</td><td>${escapeHtml(row.business)}</td><td>${escapeHtml(row.shift)}</td><td>${escapeHtml(row.checkIn)}</td><td>${escapeHtml(row.checkOut)}</td><td><span class="report-status-pill ${reportStatusTone(row.status)}">${escapeHtml(row.status)}</span></td><td>${row.lateMinutes ? `${row.lateMinutes} mnt` : "-"}</td><td>${escapeHtml(row.workedHours)}</td></tr>`).join("")}</tbody></table>${rows.length > 100 ? `<p class="report-note">Menampilkan 100 dari ${rows.length} baris. Ekspor untuk data lengkap.</p>` : ""}`
+        : `<div class="role-empty-state"><strong>Tidak ada data absensi.</strong><span>Ubah tanggal, bisnis, atau karyawan lalu klik “Muat laporan” lagi.</span></div>`;
       renderEmployeeChoices(report.employees);
       if (report.errors?.length) error.textContent = report.errors.join(" ");
       pdfButton.disabled = !rows.length;

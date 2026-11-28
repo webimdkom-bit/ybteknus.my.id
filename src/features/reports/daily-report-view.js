@@ -34,16 +34,35 @@ const STATUS_LABELS = Object.freeze({
   revision: "Perlu revisi",
 });
 
+const TASK_STATUS_LABELS = Object.freeze({
+  assigned: "Ditugaskan",
+  "in-progress": "Dikerjakan",
+  completed: "Selesai",
+  submitted: "Dikirim",
+  revision: "Perlu revisi",
+  approved: "Disetujui",
+  cancelled: "Dibatalkan",
+  archived: "Diarsipkan",
+});
+
 export async function openDailyReportViewer({ profile }) {
   const reviewMode = profile.role === "owner" || (profile.role === "admin" && can(profile, "reviewSubmissions"));
   const overlay = document.createElement("div");
   overlay.className = "daily-report-overlay";
   overlay.innerHTML = `<section class="daily-report-modal" role="dialog" aria-modal="true" aria-labelledby="daily-report-title"><div class="daily-report-head"><div><p class="eyebrow">DAILY REPORT</p><h2 id="daily-report-title">${reviewMode ? "Laporan harian tim" : "Laporan harian saya"}</h2><p>${reviewMode ? "Lihat dan tinjau laporan kerja harian per tanggal." : "Catat pekerjaan harian Anda. Tugas dengan deadline hari ini otomatis masuk."}</p></div><button class="icon-button daily-report-close" aria-label="Tutup">×</button></div><div class="daily-report-body"></div></section>`;
   document.body.append(overlay);
+  const photoViewer = document.createElement("div");
+  photoViewer.className = "task-photo-viewer";
+  photoViewer.hidden = true;
+  photoViewer.innerHTML = `<div class="task-photo-viewer-inner"><button class="icon-button task-photo-close" aria-label="Tutup foto">×</button><div class="task-photo-list"></div></div>`;
+  overlay.append(photoViewer);
+  const hidePhotoViewer = () => { photoViewer.hidden = true; photoViewer.querySelector(".task-photo-list").innerHTML = ""; };
+  photoViewer.querySelector(".task-photo-close").addEventListener("click", hidePhotoViewer);
+  photoViewer.addEventListener("click", (event) => { if (event.target === photoViewer) hidePhotoViewer(); });
   overlay.querySelector(".daily-report-close").addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
   const body = overlay.querySelector(".daily-report-body");
-  if (reviewMode) await renderOwnerMode(body, profile, profile.role === "admin");
+  if (reviewMode) await renderOwnerMode(body, profile, profile.role === "admin", photoViewer);
   else await renderPersonalMode(body, profile);
 }
 
@@ -191,7 +210,7 @@ function bindPersonalEvents(body, profile, reportDate, report, apply) {
   }));
 }
 
-async function renderOwnerMode(body, profile, adminMode = false) {
+async function renderOwnerMode(body, profile, adminMode = false, photoViewer = null) {
   let reportDate = getDateKey();
   let businessId = "";
   let term = "";
@@ -230,8 +249,17 @@ async function renderOwnerMode(body, profile, adminMode = false) {
     render();
   }
 
+  const openPhotoViewer = (urls) => {
+    if (!photoViewer) return;
+    const photos = urls.map((url) => safeUrl(url)).filter(Boolean);
+    photoViewer.querySelector(".task-photo-list").innerHTML = photos.length
+      ? photos.map((url) => `<img src="${url}" alt="Foto bukti karyawan" />`).join("")
+      : `<p class="task-empty">Tidak ada foto pada laporan ini.</p>`;
+    photoViewer.hidden = false;
+  };
+
   function render() {
-    body.innerHTML = `<div class="daily-report-toolbar"><div class="field"><label for="daily-owner-date">Tanggal</label><input id="daily-owner-date" type="date" value="${reportDate}" /></div><div class="field"><label for="daily-owner-business">Bisnis</label><select id="daily-owner-business"><option value="">Semua bisnis</option>${businessOptions}</select></div><div class="field"><label for="daily-owner-search">Cari</label><input id="daily-owner-search" type="search" value="${escapeHtml(term)}" placeholder="Nama atau email" /></div></div><p class="daily-report-error">${escapeHtml(error)}</p><p class="daily-report-message">${escapeHtml(message)}</p><div class="daily-report-grid"><div class="daily-report-list"><div class="daily-report-section-head"><h3>Laporan ${escapeHtml(reportDate)}</h3><span>${reports.length} laporan</span></div>${reports.length ? reports.map((item) => `<button class="daily-report-row ${selected?.id === item.id ? "is-selected" : ""}" data-daily-report-select="${escapeHtml(item.id)}"><strong>${escapeHtml(item.displayName || item.email || "Karyawan")}</strong><span>${escapeHtml(item.role || "-")} · ${escapeHtml(STATUS_LABELS[item.status] || item.status)}</span><small>${escapeHtml(item.submittedAt ? formatDate(item.submittedAt) : "Belum dikirim")}</small></button>`).join("") : `<div class="role-empty-state"><strong>Belum ada laporan.</strong><span>Coba tanggal atau filter lain.</span></div>`}</div><div class="daily-report-detail">${selected ? renderDetail(selected, true, taskReports, taskMap) : `<div class="role-empty-state"><strong>Pilih laporan.</strong><span>Detail laporan akan tampil di sini.</span></div>`}</div></div>`;
+    body.innerHTML = `<div class="daily-report-toolbar"><div class="field"><label for="daily-owner-date">Tanggal</label><input id="daily-owner-date" type="date" value="${reportDate}" /></div><div class="field"><label for="daily-owner-business">Bisnis</label><select id="daily-owner-business"><option value="">Semua bisnis</option>${businessOptions}</select></div><div class="field"><label for="daily-owner-search">Cari</label><input id="daily-owner-search" type="search" value="${escapeHtml(term)}" placeholder="Nama atau email" /></div></div><p class="daily-report-error">${escapeHtml(error)}</p><p class="daily-report-message">${escapeHtml(message)}</p><div class="daily-report-grid"><div class="daily-report-list"><div class="daily-report-section-head"><h3>Laporan ${escapeHtml(reportDate)}</h3><span>${reports.length} laporan</span></div>${reports.length ? reports.map((item) => `<button class="daily-report-row ${selected?.id === item.id ? "is-selected" : ""}" data-daily-report-select="${escapeHtml(item.id)}"><strong>${escapeHtml(item.displayName || item.email || "Karyawan")}</strong><span class="daily-report-row-meta">${escapeHtml(item.role || "-")} <span class="daily-report-pill ${escapeHtml(item.status)}">${escapeHtml(STATUS_LABELS[item.status] || item.status)}</span></span><small>Dikirim ${escapeHtml(item.submittedAt ? formatDate(item.submittedAt) : "belum")}</small></button>`).join("") : `<div class="role-empty-state"><strong>Belum ada laporan.</strong><span>Pilih tanggal lain atau ubah filter bisnis untuk melihat laporan.</span></div>`}</div><div class="daily-report-detail">${selected ? renderDetail(selected, true, taskReports, taskMap) : `<div class="role-empty-state"><strong>Pilih laporan karyawan.</strong><span>Detail laporan, tugas, dan foto bukti akan tampil di sini.</span></div>`}</div></div>`;
     body.querySelector("#daily-owner-date").addEventListener("change", (event) => { reportDate = event.target.value || getDateKey(); selected = null; reload(); });
     body.querySelector("#daily-owner-business").addEventListener("change", (event) => { businessId = event.target.value; selected = null; reload(); });
     body.querySelector("#daily-owner-search").addEventListener("input", (event) => { term = event.target.value; selected = null; reload(); });
@@ -266,6 +294,18 @@ async function renderOwnerMode(body, profile, adminMode = false) {
         const result = await requestFileAccess(button.dataset.dailyFileOpen);
         if (result?.url) window.open(result.url, "_blank", "noopener,noreferrer");
       } catch (fileError) { window.alert(fileError.message); }
+    }));
+    body.querySelectorAll("[data-daily-photo]").forEach((button) => button.addEventListener("click", () => {
+      const [taskId, itemIndex] = button.dataset.dailyPhoto.split("|");
+      const taskReport = taskReports.find((item) => item.taskId === taskId && item.userId === selected?.userId);
+      const url = taskReport?.checklist?.[Number(itemIndex)]?.evidenceUrl;
+      openPhotoViewer(url ? [url] : []);
+    }));
+    body.querySelectorAll("[data-daily-file-photo]").forEach((button) => button.addEventListener("click", async () => {
+      try {
+        const result = await requestFileAccess(button.dataset.dailyFilePhoto);
+        openPhotoViewer(result?.url ? [result.url] : []);
+      } catch (fileError) { error = fileError.message; render(); }
     }));
     body.querySelectorAll("[data-task-report-action]").forEach((button) => button.addEventListener("click", async () => {
       const restore = setBusy(button, "Menyimpan...");
@@ -354,7 +394,11 @@ function renderDetail(report, canReview = false, reports = [], taskMap = new Map
   const reviewActions = canReview
     ? `<div class="daily-report-actions"><button class="secondary-button" type="button" data-daily-review="revision" ${report.status === DAILY_REPORT_STATUS.REVIEWED ? "disabled" : ""}>Minta revisi</button><button class="primary-button" type="button" data-daily-review="reviewed" ${report.status === DAILY_REPORT_STATUS.REVIEWED ? "disabled" : ""}>Tandai ditinjau</button></div>`
     : "";
-  return `<div class="daily-report-detail-head"><div><h3>${escapeHtml(report.displayName || report.email || "Karyawan")}</h3><p>${escapeHtml(report.role || "-")} · ${escapeHtml(reportDateLabel(report.reportDate))}</p></div><span class="daily-report-pill ${escapeHtml(report.status)}">${STATUS_LABELS[report.status] || report.status}</span></div>${report.reviewNote ? `<p class="daily-report-review-note"><strong>Catatan review:</strong> ${escapeHtml(report.reviewNote)}</p>` : ""}<h4>Catatan harian</h4><p class="daily-report-notes">${escapeHtml(report.notes || "-")}</p><h4>Tugas</h4>${renderTaskEntries(report.tasks || [], reports, taskMap, canReview)}<h4>Lampiran</h4>${renderAttachments(report.attachments || [])}${reviewActions}`;
+  const photoCount = (report.tasks || []).reduce((total, entry) => {
+    const taskReport = reports.find((item) => item.id === entry.reportId);
+    return total + (taskReport?.checklist || []).filter((item) => safeUrl(item.evidenceUrl)).length;
+  }, 0);
+  return `<div class="daily-report-detail-head"><div><h3>${escapeHtml(report.displayName || report.email || "Karyawan")}</h3><p>${escapeHtml(report.role || "-")} · ${escapeHtml(reportDateLabel(report.reportDate))}</p></div><span class="daily-report-pill ${escapeHtml(report.status)}">${STATUS_LABELS[report.status] || report.status}</span></div>${report.reviewNote ? `<p class="daily-report-review-note"><strong>Catatan review:</strong> ${escapeHtml(report.reviewNote)}</p>` : ""}<h4>Catatan harian</h4><p class="daily-report-notes">${escapeHtml(report.notes || "-")}</p><h4>Tugas (${(report.tasks || []).length})</h4>${photoCount ? `<p class="field-hint">Ada ${photoCount} foto bukti. Klik foto untuk melihat detailnya.</p>` : ""}${renderTaskEntries(report.tasks || [], reports, taskMap, canReview)}<h4>Lampiran (${(report.attachments || []).length})</h4>${renderAttachments(report.attachments || [])}${reviewActions}`;
 }
 
 function renderTaskEntries(entries, reports = [], taskMap = new Map(), canReview = false) {
@@ -364,21 +408,24 @@ function renderTaskEntries(entries, reports = [], taskMap = new Map(), canReview
     const task = taskMap.get(entry.taskId);
     const checklist = report?.checklist || [];
     const checklistMarkup = checklist.length
-      ? `<div class="daily-report-checklist">${checklist.map((item) => `<div class="daily-report-check-item"><span>${item.completed ? "✓" : "○"} ${escapeHtml(item.label)}</span>${item.evidenceUrl && safeUrl(item.evidenceUrl) ? `<img src="${safeUrl(item.evidenceUrl)}" alt="Bukti ${escapeHtml(item.label)}" />` : ""}</div>`).join("")}</div>`
+      ? `<div class="daily-report-checklist">${checklist.map((item, index) => `<div class="daily-report-check-item"><span>${item.completed ? "✓" : "○"} ${escapeHtml(item.label)}</span>${item.evidenceUrl && safeUrl(item.evidenceUrl) ? `<button class="request-photo-button" type="button" data-daily-photo="${escapeHtml(entry.taskId)}|${index}" aria-label="Lihat foto bukti ${escapeHtml(item.label)}"><img src="${safeUrl(item.evidenceUrl)}" alt="Bukti ${escapeHtml(item.label)}" /></button>` : ""}</div>`).join("")}</div>`
       : "";
     const reviewActions = canReview && report && report.status === "submitted"
-      ? `<div class="daily-report-task-actions"><button class="approve-registration" type="button" data-task-report-action="approved" data-task-report-id="${escapeHtml(report.id)}" data-task-id="${escapeHtml(entry.taskId)}">ACC</button><button class="reject-registration" type="button" data-task-report-action="revision" data-task-report-id="${escapeHtml(report.id)}" data-task-id="${escapeHtml(entry.taskId)}">Revisi</button></div>`
+      ? `<button class="approve-registration" type="button" data-task-report-action="approved" data-task-report-id="${escapeHtml(report.id)}" data-task-id="${escapeHtml(entry.taskId)}">ACC</button><button class="reject-registration" type="button" data-task-report-action="revision" data-task-report-id="${escapeHtml(report.id)}" data-task-id="${escapeHtml(entry.taskId)}">Revisi</button>`
       : "";
     const subtaskActions = canReview && task
       ? `<button class="secondary-button" type="button" data-task-subtask-toggle="${escapeHtml(entry.taskId)}">Buat subtugas</button><div class="daily-report-subtask-form" data-task-subtask-form="${escapeHtml(entry.taskId)}" hidden><input type="text" data-subtask-title placeholder="Judul subtugas" /><select data-subtask-assignee><option value="">Pilih employee</option></select><button class="primary-button" type="button" data-task-subtask-submit="${escapeHtml(entry.taskId)}">Buat subtugas</button></div>`
       : "";
-    return `<article class="daily-report-task"><div><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(getDeadlineDate(entry.deadline) || "-")} · progres ${Number(entry.progress || 0)}%</span></div><b class="task-status ${escapeHtml(entry.taskStatus || "assigned")}">${entry.completed ? "selesai" : escapeHtml(entry.taskStatus || "assigned")}</b>${entry.reportId ? `<small>Laporan tugas: ${escapeHtml(entry.reportStatus || "submitted")}</small>` : ""}${report?.description ? `<p class="daily-report-task-report">${escapeHtml(report.description)}</p>` : ""}${checklistMarkup}<div class="daily-report-task-actions">${reviewActions}${subtaskActions}</div></article>`;
+    return `<article class="daily-report-task"><div><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(getDeadlineDate(entry.deadline) || "-")} · progres ${Number(entry.progress || 0)}%</span></div><b class="task-status ${escapeHtml(entry.taskStatus || "assigned")}">${entry.completed ? "Selesai" : escapeHtml(TASK_STATUS_LABELS[entry.taskStatus] || entry.taskStatus || "Ditugaskan")}</b>${entry.reportId ? `<small>Laporan tugas: ${escapeHtml(TASK_STATUS_LABELS[entry.reportStatus] || entry.reportStatus || "Dikirim")}</small>` : ""}${report?.description ? `<p class="daily-report-task-report">${escapeHtml(report.description)}</p>` : ""}${checklistMarkup}<div class="daily-report-task-actions">${reviewActions}${subtaskActions}</div></article>`;
   }).join("");
 }
 
 function renderAttachments(attachments) {
   if (!attachments.length) return `<div class="role-empty-state"><strong>Belum ada lampiran.</strong><span>Tambahkan foto atau dokumen pendukung.</span></div>`;
-  return attachments.map((file) => `<article class="daily-report-file"><div><strong>${escapeHtml(file.fileName)}</strong><span>${escapeHtml(file.resourceType)} · ${escapeHtml(file.access)}</span></div><button class="secondary-button" type="button" data-daily-file-open="${escapeHtml(file.fileId)}">Buka</button></article>`).join("");
+  return attachments.map((file) => {
+    const image = String(file.resourceType || "").startsWith("image");
+    return `<article class="daily-report-file"><div><strong>${escapeHtml(file.fileName)}</strong><span>${image ? "Foto" : escapeHtml(file.resourceType)} · ${escapeHtml(file.access === "private" ? "pribadi" : "publik")}</span></div><button class="secondary-button" type="button" data-daily-${image ? "file-photo" : "file-open"}="${escapeHtml(file.fileId)}">${image ? "Lihat foto" : "Buka"}</button></article>`;
+  }).join("");
 }
 
 function toDateKey(value) {

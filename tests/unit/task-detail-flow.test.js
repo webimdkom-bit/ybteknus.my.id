@@ -56,6 +56,15 @@ describe("task detail flow", () => {
     expect(uploadService).toContain("checklistItemId })");
   });
 
+  it("shows a busy state and success notice after submitting a task", () => {
+    expect(view).toContain('setBusy(submitButton, "Mengirim tugas...")');
+    expect(view).toContain('setMessage("Tugas berhasil disubmit. Menunggu review Owner/Admin.", "is-success")');
+    expect(view).toContain('classList.toggle("is-success", tone === "is-success")');
+    expect(view).toContain('classList.contains("is-success") ? "is-success" : ""');
+    expect(view).toContain("finally { restoreSubmit(); }");
+    expect(css).toContain(".task-detail-message.is-success { color: #6f8b20; }");
+  });
+
   it("renders task reports, checklist photos, and review actions in owner daily report", () => {
     expect(dailyView).toContain("renderDetail(selected, true, taskReports, taskMap)");
     expect(dailyView).toContain("data-task-report-action=\"approved\"");
