@@ -236,7 +236,7 @@ service cloud.firestore {
           && resource.data.assignedTo.hasAny([request.auth.uid])
           && sameOrganization(resource.data.organizationId)
           && request.resource.data.organizationId == resource.data.organizationId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'checklistByUser', 'progressByUser', 'progress', 'timeStatus', 'updatedAt']));
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'checklistByUser', 'evidenceByUser', 'progressByUser', 'progress', 'timeStatus', 'updatedAt']));
       allow delete: if isOwner()
         && sameOrganization(resource.data.organizationId);
     }

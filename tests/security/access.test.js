@@ -48,6 +48,10 @@ describe("Firestore rules isolation clauses", () => {
     expect(rules).toContain("&& sameOrganization(resource.data.organizationId)));");
   });
 
+  it("allows assignees to save their own task evidence photo", () => {
+    expect(rules).toContain("['status', 'checklistByUser', 'evidenceByUser', 'progressByUser', 'progress', 'timeStatus', 'updatedAt']");
+  });
+
   it("unknown collections are denied by default", () => {
     expect(rules).toContain("match /{collection}/{documentId} {\n      allow read, create, update, delete: if false;");
   });
