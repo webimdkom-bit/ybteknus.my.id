@@ -24,10 +24,10 @@ export async function createOwnerBusiness({ organizationId, name, city }) {
 export async function deleteOwnerBusiness({ businessId }) {
   const token = await auth.currentUser?.getIdToken(true);
   if (!token) throw new Error("Sesi tidak ditemukan.");
-  const response = await fetch("/api/business-delete", {
+  const response = await fetch("/api/provision-user", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ businessId }),
+    body: JSON.stringify({ action: "delete-business", businessId }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Gagal menghapus bisnis.");

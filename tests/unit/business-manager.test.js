@@ -6,7 +6,7 @@ const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)
 
 const view = read("../../src/features/businesses/business-view.js");
 const service = read("../../src/features/businesses/business-service.js");
-const endpoint = read("../../api/business-delete.js");
+const endpoint = read("../../api/provision-user.js");
 const audit = read("../../api/audit-log.js");
 const css = read("../../src/styles/main.css");
 
@@ -23,8 +23,10 @@ describe("owner business deletion", () => {
   });
 
   it("uses a fresh token for the delete request", () => {
-    expect(service).toContain('fetch("/api/business-delete"');
+    expect(service).toContain('fetch("/api/provision-user"');
+    expect(service).toContain('action: "delete-business"');
     expect(service).toContain("getIdToken(true)");
+    expect(endpoint).toContain('body.action === "delete-business"');
     expect(endpoint).toContain("decoded.auth_time");
     expect(endpoint).toContain("FRESH_AUTH_SECONDS");
   });
