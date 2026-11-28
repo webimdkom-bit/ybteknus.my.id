@@ -33,6 +33,10 @@ export async function requestDailyReportUploadSignature({ reportId, fileName, re
   return post("/api/file-upload", { reportId, fileName, resourceType });
 }
 
+export async function requestRequestEvidenceSignature({ requestId, organizationId, businessId, fileName }) {
+  return post("/api/file-upload", { requestId, organizationId, businessId, fileName, resourceType: "image" });
+}
+
 export function recordFileMetadata(payload) {
   return post("/api/file-metadata", payload);
 }

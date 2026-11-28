@@ -81,6 +81,15 @@ describe("loading motion foundation", () => {
     expect(css).toContain(".daily-report-close { width: 44px");
   });
 
+  it("prevents iPhone horizontal overflow and zoom in employee modals", () => {
+    expect(css).toContain(".request-row > div, .request-person, .request-row span, .request-row small, .request-status, .request-actions, .daily-report-task strong, .daily-report-file strong, .daily-report-message, .daily-report-task-report { min-width: 0; overflow-wrap: anywhere; }");
+    expect(css).toContain(".request-modal input, .request-modal select, .request-modal textarea, .daily-report-modal input, .daily-report-modal select, .daily-report-modal textarea { font-size: 16px !important; }");
+    expect(css).toContain("body:has(.sidebar.open), body:has(.request-overlay), body:has(.daily-report-overlay) { overflow: hidden; }");
+    expect(css).toContain(".file-modal, .daily-report-modal { --modal-gutter: 16px;");
+    expect(css).toContain(".daily-report-modal { width: 100%; max-width: none; min-height: 100vh; min-height: 100dvh; max-height: none; overscroll-behavior: contain;");
+    expect(css).toContain(".daily-report-overlay { padding: 0; place-items: stretch; }");
+  });
+
   it("sets and restores busy control state", () => {
     const classes = new Set();
     const attributes = new Map();

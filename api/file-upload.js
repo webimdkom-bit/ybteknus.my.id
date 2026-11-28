@@ -15,11 +15,14 @@ export default async function handler(req, res) {
   const body = parseBody(req);
   const taskId = String(body.taskId || "").trim();
   const reportId = String(body.reportId || "").trim();
+  const requestId = String(body.requestId || "").trim().slice(0, 80);
+  const organizationId = String(body.organizationId || "").trim();
+  const businessId = String(body.businessId || "").trim();
   const fileName = String(body.fileName || "").trim().slice(0, 120);
   const checklistItemId = String(body.checklistItemId || "").trim().slice(0, 80);
   const resourceType = body.resourceType === "raw" ? "raw" : body.resourceType === "image" ? "image" : null;
-  if ((!taskId && !reportId) || (taskId && reportId) || !fileName || !resourceType) {
-    return sendJson(res, 400, { error: "taskId atau reportId, fileName, dan resourceType wajib diisi." });
+  if ([taskId, reportId, requestId].filter(Boolean).length !== 1 || !fileName || !resourceType) {
+    return sendJson(res, 400, { error: "taskId, reportId, atau requestId, fileName, dan resourceType wajib diisi." });
   }
 
   if (!isCloudinaryConfigured()) return sendJson(res, 503, { error: "Cloudinary belum dikonfigurasi." });
@@ -44,6 +47,16 @@ export default async function handler(req, res) {
     const folder = `tasks/${uid}`;
     const signature = await generateUploadSignature({ publicId, folder, resourceType });
     return sendJson(res, 200, { ...signature, taskId, fileName, checklistItemId });
+  }
+
+  if (requestId) {
+    if (!organizationId) return sendJson(res, 400, { error: "organizationId wajib diisi." });
+    if (actor.organizationId !== organizationId) return sendJson(res, 403, { error: "Organisasi di luar jangkauan." });
+    if (actor.role !== "owner" && businessId && !(actor.businessIds || []).includes(businessId)) return sendJson(res, 403, { error: "Bisnis di luar jangkauan." });
+    const publicId = `evidence/${uid}/requests/${requestId}/${fileName}`.replace(/[^a-zA-Z0-9/_-]/g, "_");
+    const folder = `requests/${uid}`;
+    const signature = await generateUploadSignature({ publicId, folder, resourceType });
+    return sendJson(res, 200, { ...signature, requestId, fileName });
   }
 
   const reportSnapshot = await db.collection("dailyReports").doc(reportId).get();

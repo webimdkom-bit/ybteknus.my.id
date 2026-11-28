@@ -180,35 +180,37 @@ body { min-width: 0; }
 .file-copy strong, .file-copy span, .notification-copy strong, .notification-copy span, .notification-copy small { overflow-wrap: anywhere; }
 
 @media (max-width: 720px) {
-  .schedule-overlay, .attendance-overlay, .business-overlay, .owner-overlay, .request-overlay, .task-overlay, .registration-overlay, .report-overlay, .audit-overlay, .notification-overlay, .profile-overlay, .file-overlay { padding: 0; place-items: stretch; }
-  .schedule-modal, .attendance-modal, .business-modal, .owner-modal, .request-modal, .task-modal, .registration-modal, .report-modal, .audit-modal, .notification-modal, .profile-modal, .file-modal { --modal-gutter: 16px; width: 100%; max-width: none; min-height: 100vh; min-height: 100dvh; max-height: none; overflow: auto; overscroll-behavior: contain; padding: 0 max(var(--modal-gutter), env(safe-area-inset-right, 0px)) max(40px, env(safe-area-inset-bottom, 0px)) max(var(--modal-gutter), env(safe-area-inset-left, 0px)); }
-  .schedule-modal-head, .attendance-modal-head, .business-modal-head, .owner-modal-head, .request-modal-head, .task-modal-head, .registration-modal-head, .report-modal-head, .audit-modal-head, .notification-modal-head, .profile-modal-head, .file-modal-head { position: sticky; top: 0; z-index: 1; background: #f4f6f1; margin: 0 calc(-1 * max(var(--modal-gutter), env(safe-area-inset-right, 0px))) 0 calc(-1 * max(var(--modal-gutter), env(safe-area-inset-left, 0px))); padding: max(22px, env(safe-area-inset-top, 0px)) max(var(--modal-gutter), env(safe-area-inset-right, 0px)) 14px max(var(--modal-gutter), env(safe-area-inset-left, 0px)); }
-  .schedule-modal-head h2, .attendance-modal-head h2, .business-modal-head h2, .owner-modal-head h2, .request-modal-head h2, .task-modal-head h2, .registration-modal-head h2, .report-modal-head h2, .audit-modal-head h2, .notification-modal-head h2, .profile-modal-head h2, .file-modal-head h2 { font-size: 22px; }
+  .schedule-overlay, .attendance-overlay, .business-overlay, .owner-overlay, .request-overlay, .task-overlay, .registration-overlay, .report-overlay, .audit-overlay, .notification-overlay, .profile-overlay, .file-overlay, .daily-report-overlay { padding: 0; place-items: stretch; }
+  .schedule-modal, .attendance-modal, .business-modal, .owner-modal, .request-modal, .task-modal, .registration-modal, .report-modal, .audit-modal, .notification-modal, .profile-modal, .file-modal, .daily-report-modal { --modal-gutter: 16px; width: 100%; max-width: none; min-height: 100vh; min-height: 100dvh; max-height: none; overflow: auto; overscroll-behavior: contain; padding: 0 max(var(--modal-gutter), env(safe-area-inset-right, 0px)) max(40px, env(safe-area-inset-bottom, 0px)) max(var(--modal-gutter), env(safe-area-inset-left, 0px)); }
+  .schedule-modal-head, .attendance-modal-head, .business-modal-head, .owner-modal-head, .request-modal-head, .task-modal-head, .registration-modal-head, .report-modal-head, .audit-modal-head, .notification-modal-head, .profile-modal-head, .file-modal-head, .daily-report-head { position: sticky; top: 0; z-index: 1; background: #f4f6f1; margin: 0 calc(-1 * max(var(--modal-gutter), env(safe-area-inset-right, 0px))) 0 calc(-1 * max(var(--modal-gutter), env(safe-area-inset-left, 0px))); padding: max(22px, env(safe-area-inset-top, 0px)) max(var(--modal-gutter), env(safe-area-inset-right, 0px)) 14px max(var(--modal-gutter), env(safe-area-inset-left, 0px)); }
+  .schedule-modal-head h2, .attendance-modal-head h2, .business-modal-head h2, .owner-modal-head h2, .request-modal-head h2, .task-modal-head h2, .registration-modal-head h2, .report-modal-head h2, .audit-modal-head h2, .notification-modal-head h2, .profile-modal-head h2, .file-modal-head h2, .daily-report-head h2 { font-size: 22px; }
   .schedule-layout, .schedule-column, .schedule-fields, .business-manager-grid, .owner-manager-grid, .request-layout, .task-layout, .request-date-grid, .task-form-grid, .location-coordinate-grid, .attendance-action-grid, .employee-transfer-panel, .employee-transfer-form, .admin-permission-grid, .task-category-row, .report-filters { grid-template-columns: 1fr !important; gap: 16px; }
   .report-summary { grid-template-columns: repeat(2, 1fr) !important; }
   .report-table-wrap { max-height: 46vh; max-height: 46dvh; }
   .shift-row, .business-row, .managed-business-row, .managed-owner-row, .employee-management-row, .task-row-actions, .task-report-row, .task-final-report, .request-actions, .registration-actions, .notification-head-actions, .file-actions { flex-wrap: wrap; }
-  .schedule-modal button, .attendance-modal button, .business-modal button, .owner-modal button, .request-modal button, .task-modal button, .registration-modal button, .report-modal button, .audit-modal button, .notification-modal button, .profile-modal button, .file-modal button, .weekday-list label { min-height: 44px !important; font-size: 11px !important; }
-  .schedule-close, .attendance-close, .business-close, .owner-close, .request-close, .task-close, .registration-close, .report-close, .audit-close, .notification-close, .profile-close, .file-close { width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 24px !important; }
+  .schedule-modal button, .attendance-modal button, .business-modal button, .owner-modal button, .request-modal button, .task-modal button, .registration-modal button, .report-modal button, .audit-modal button, .notification-modal button, .profile-modal button, .file-modal button, .daily-report-modal button, .weekday-list label { min-height: 44px !important; font-size: 11px !important; }
+  .schedule-close, .attendance-close, .business-close, .owner-close, .request-close, .task-close, .registration-close, .report-close, .audit-close, .notification-close, .profile-close, .file-close, .task-photo-close { width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 24px !important; }
   .weekday-list label { display: inline-flex; align-items: center; }
   .weekday-list label, .shift-count, .business-count, .owner-count, .registration-error, .task-error, .request-error, .attendance-error, .report-error, .profile-message, .profile-error, .notification-copy span, .notification-copy small, .file-copy span, .registration-person span, .registration-person small, .audit-row, .audit-row small, .audit-time, .report-table, .report-table th, .report-note { font-size: 11px; }
+  .request-row > div, .request-person, .request-row span, .request-row small, .request-status, .request-actions, .daily-report-task strong, .daily-report-file strong, .daily-report-message, .daily-report-task-report { min-width: 0; overflow-wrap: anywhere; }
+  .request-modal input, .request-modal select, .request-modal textarea, .daily-report-modal input, .daily-report-modal select, .daily-report-modal textarea { font-size: 16px !important; }
   .task-instructions, .task-requirements { font-size: 11px !important; }
   .report-actions button, .attendance-action-grid button, .shift-form .primary-button, .profile-form .primary-button { width: 100%; }
-  body:has(.sidebar.open) { overflow: hidden; }
+  body:has(.sidebar.open), body:has(.request-overlay), body:has(.daily-report-overlay) { overflow: hidden; }
   body:has(.sidebar.open)::before { content: ""; position: fixed; inset: 0; z-index: var(--z-drawer-scrim); background: rgba(24, 34, 37, .45); }
   .sidebar { height: 100vh; height: 100dvh; padding-top: max(28px, env(safe-area-inset-top, 0px)); padding-bottom: max(18px, env(safe-area-inset-bottom, 0px)); overscroll-behavior: contain; }
 }
 
 @media (min-width: 721px) and (max-width: 1024px) {
-  .schedule-modal, .attendance-modal, .business-modal, .owner-modal, .request-modal, .task-modal, .registration-modal, .report-modal, .audit-modal, .notification-modal, .profile-modal, .file-modal { max-height: 94vh; max-height: 94dvh; }
-  .schedule-modal-head, .attendance-modal-head, .business-modal-head, .owner-modal-head, .request-modal-head, .task-modal-head, .registration-modal-head, .report-modal-head, .audit-modal-head, .notification-modal-head, .profile-modal-head, .file-modal-head { position: sticky; top: 0; z-index: 1; background: #f4f6f1; margin: -8px -30px 0; padding: 8px 30px 14px; }
+  .schedule-modal, .attendance-modal, .business-modal, .owner-modal, .request-modal, .task-modal, .registration-modal, .report-modal, .audit-modal, .notification-modal, .profile-modal, .file-modal, .daily-report-modal { max-height: 94vh; max-height: 94dvh; }
+  .schedule-modal-head, .attendance-modal-head, .business-modal-head, .owner-modal-head, .request-modal-head, .task-modal-head, .registration-modal-head, .report-modal-head, .audit-modal-head, .notification-modal-head, .profile-modal-head, .file-modal-head, .daily-report-head { position: sticky; top: 0; z-index: 1; background: #f4f6f1; margin: -8px -30px 0; padding: 8px 30px 14px; }
   .profile-modal-head, .file-modal-head { margin: -8px -28px 0; padding: 8px 28px 14px; }
-  .schedule-modal button, .attendance-modal button, .business-modal button, .owner-modal button, .request-modal button, .task-modal button, .registration-modal button, .report-modal button, .audit-modal button, .notification-modal button, .profile-modal button, .file-modal button, .weekday-list label { min-height: 44px !important; font-size: 11px !important; }
-  .schedule-close, .attendance-close, .business-close, .owner-close, .request-close, .task-close, .registration-close, .report-close, .audit-close, .notification-close, .profile-close, .file-close { width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 24px !important; }
+  .schedule-modal button, .attendance-modal button, .business-modal button, .owner-modal button, .request-modal button, .task-modal button, .registration-modal button, .report-modal button, .audit-modal button, .notification-modal button, .profile-modal button, .file-modal button, .daily-report-modal button, .weekday-list label { min-height: 44px !important; font-size: 11px !important; }
+  .schedule-close, .attendance-close, .business-close, .owner-close, .request-close, .task-close, .registration-close, .report-close, .audit-close, .notification-close, .profile-close, .file-close, .task-photo-close { width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 24px !important; }
 }
 
 @media (max-width: 430px) {
-  .schedule-modal, .attendance-modal, .business-modal, .owner-modal, .request-modal, .task-modal, .registration-modal, .report-modal, .audit-modal, .notification-modal, .profile-modal, .file-modal { --modal-gutter: 13px; }
+  .schedule-modal, .attendance-modal, .business-modal, .owner-modal, .request-modal, .task-modal, .registration-modal, .report-modal, .audit-modal, .notification-modal, .profile-modal, .file-modal, .daily-report-modal { --modal-gutter: 13px; }
 }
 
 .employee-schedule-card { scroll-margin-top: 160px; }
@@ -299,8 +301,8 @@ body { min-width: 0; }
   .task-list-scroll { max-height: none; overflow: visible; }
   .task-assignee-list label { min-height: 44px; font-size: 11px; }
   .daily-report-overlay { padding: 0; place-items: stretch; }
-  .daily-report-modal { width: 100%; max-width: none; min-height: 100vh; max-height: none; padding: 22px 16px 40px; }
-  .daily-report-head { position: sticky; top: 0; z-index: 1; background: #f4f6f1; margin: -22px -16px 0; padding: max(22px, env(safe-area-inset-top, 0px)) 16px 14px; }
+  .daily-report-modal { width: 100%; max-width: none; min-height: 100vh; min-height: 100dvh; max-height: none; overscroll-behavior: contain; padding: 0 max(var(--modal-gutter), env(safe-area-inset-right, 0px)) max(40px, env(safe-area-inset-bottom, 0px)) max(var(--modal-gutter), env(safe-area-inset-left, 0px)); }
+  .daily-report-head { position: sticky; top: 0; z-index: 1; background: #f4f6f1; margin: 0 calc(-1 * max(var(--modal-gutter), env(safe-area-inset-right, 0px))) 0 calc(-1 * max(var(--modal-gutter), env(safe-area-inset-left, 0px))); padding: max(22px, env(safe-area-inset-top, 0px)) max(var(--modal-gutter), env(safe-area-inset-right, 0px)) 14px max(var(--modal-gutter), env(safe-area-inset-left, 0px)); }
   .daily-report-modal button { min-height: 44px; font-size: 11px; }
   .daily-report-close { width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 24px !important; }
   .daily-report-toolbar, .daily-report-grid { grid-template-columns: 1fr !important; }
@@ -389,10 +391,13 @@ body { min-width: 0; }
 .task-report-head span { color: #596667; font-size: 11px; line-height: 1.6; }
 .task-report-checklist { display: flex; flex-wrap: wrap; gap: 6px 12px; color: #677473; font-size: 10px; padding: 6px 0; }
 .task-report-photos, .task-photo-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.task-report-photos[hidden], .task-photo-list[hidden] { display: none; }
 .task-report-photos img { width: 72px; height: 72px; object-fit: cover; border: 1px solid #dfe4dc; }
+.request-photo-button { padding: 0; border: 0; background: transparent; cursor: zoom-in; line-height: 0; }
+.request-photo-button:focus-visible { outline: 2px solid #8da82e; outline-offset: 2px; }
 .task-report-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .task-photo-viewer { position: fixed; inset: 0; z-index: 60; background: rgba(24,34,37,.82); display: grid; place-items: center; padding: 24px; }
 .task-photo-viewer[hidden] { display: none; }
-.task-photo-viewer-inner { position: relative; background: #f4f6f1; padding: 28px; max-width: min(100%, 1000px); max-height: 90vh; overflow: auto; }
+.task-photo-viewer-inner { position: relative; background: #f4f6f1; padding: 28px; max-width: min(100%, 1000px); max-height: 90vh; max-height: 90dvh; overflow: auto; }
 .task-photo-viewer-inner .task-photo-close { position: absolute; top: 8px; right: 8px; }
-.task-photo-list img { max-width: 320px; max-height: 60vh; object-fit: contain; border: 1px solid #dfe4dc; background: #fff; }
+.task-photo-list img { max-width: min(320px, 100%); max-height: 60vh; object-fit: contain; border: 1px solid #dfe4dc; background: #fff; }
