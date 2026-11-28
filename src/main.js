@@ -323,7 +323,7 @@ function renderEmployeeDashboard(profile) {
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
         ${profileIdentityMarkup(profile)}
-        <div class="workspace-select"><span>MY WORKSPACE</span><div class="employee-business-label"><i data-lucide="building-2"></i> Bisnis saya</div></div>
+        <div class="workspace-select"><span>MY WORKSPACE</span><div class="employee-business-label"><i data-lucide="building-2"></i> <span data-employee-business-sidebar>Bisnis sedang dimuat...</span></div></div>
         <nav class="main-nav" aria-label="Navigasi employee">
           <a class="nav-item active" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
           <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi</span><b>02</b></a>
@@ -385,11 +385,16 @@ function setEmployeeAttendanceCta(mode, label) {
   if (labelElement) labelElement.textContent = label;
 }
 
+function setEmployeeBusinessLabel(label) {
+  document.querySelectorAll("[data-employee-business], [data-employee-business-sidebar]").forEach((element) => {
+    element.textContent = label;
+  });
+}
+
 async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
   const scheduleElement = document.querySelector("[data-employee-schedule]");
   const statusElement = document.querySelector("[data-employee-attendance-status]");
   const historyElement = document.querySelector("[data-employee-attendance-history]");
-  const businessElement = document.querySelector("[data-employee-business]");
   const taskCountElement = document.querySelector("[data-employee-task-count]");
   const businessId = profile.businessIds?.[0];
   loadEmployeeTaskSummary(profile.uid, taskCountElement);
@@ -399,6 +404,7 @@ async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
     statusElement.textContent = "Belum terdaftar";
     historyElement.innerHTML = "<div class=\"role-empty-state\"><strong>Belum ada riwayat.</strong><span>Akun belum memiliki bisnis aktif.</span></div>";
     setEmployeeAttendanceCta("unavailable", "Check-in sekarang");
+    setEmployeeBusinessLabel("Belum ada bisnis");
     return;
   }
   try {
@@ -407,7 +413,7 @@ async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
       listEmployeeSchedules(profile.uid),
       listAttendance(profile.uid),
     ]);
-    businessElement.textContent = business?.name || "Bisnis aktif";
+    setEmployeeBusinessLabel(business?.name || "Bisnis aktif");
     const todaySchedule = pickActiveSchedule(schedules, { businessId, date: today });
     const todayShift = todaySchedule ? await getShift(todaySchedule.shiftId) : null;
     scheduleElement.innerHTML = todayShift
@@ -443,6 +449,7 @@ async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
     scheduleElement.innerHTML = `<strong>Data belum tersedia.</strong><span>${escapeHtml(error.message)}</span>`;
     historyElement.innerHTML = `<div class="role-empty-state"><strong>Riwayat gagal dimuat.</strong><span>${escapeHtml(error.message)}</span></div>`;
     setEmployeeAttendanceCta("unavailable", "Check-in sekarang");
+    setEmployeeBusinessLabel("Belum ada bisnis");
   }
 }
 

@@ -57,6 +57,14 @@ describe("dashboard control wiring", () => {
     expect(attendanceView).toContain("is-suggested");
     expect(attendanceView).toContain("onChange?.()");
   });
+
+  it("shows the employee workplace name in the sidebar", () => {
+    expect(main).toContain("data-employee-business-sidebar");
+    expect(main).toContain('document.querySelectorAll("[data-employee-business], [data-employee-business-sidebar]")');
+    expect(main).toContain('setEmployeeBusinessLabel(business?.name || "Bisnis aktif")');
+    expect(main).toContain('setEmployeeBusinessLabel("Belum ada bisnis")');
+    expect(css).toContain(".employee-business-label span { min-width: 0; overflow-wrap: anywhere; }");
+  });
 });
 
 describe("loading motion foundation", () => {
