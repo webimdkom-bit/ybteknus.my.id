@@ -133,11 +133,15 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
     const locked = ["submitted", "approved"].includes(task.status);
     const editable = started && !locked;
     const allChecked = checklist.length ? checklist.every((item) => item.completed) : true;
-    const photoRequired = task.evidenceRequired === "photo" && task.checklistPhotoEnabled;
-    const photosOk = !photoRequired || checklist.every((item) => Boolean(item.evidenceFileId));
+    const taskEvidence = task.evidenceByUser?.[profile.uid] || null;
+    const taskPhotoUrl = safeUrl(taskEvidence?.evidenceUrl);
+    const photoRequired = task.evidenceRequired === "photo";
+    const photosOk = !photoRequired || Boolean(taskPhotoUrl) || (checklist.length ? checklist.every((item) => Boolean(item.evidenceFileId)) : false);
+    const showTaskEvidence = photoRequired || task.reportFormat === "photo";
     const writtenRequired = ["written", "mixed"].includes(task.reportFormat);
     const canComplete = task.status === "in-progress" && allChecked && photosOk;
     const canSubmit = ["completed", "revision"].includes(task.status)
+      && photosOk
       && (!writtenRequired || Boolean(overlay.querySelector("[data-detail-report]")?.value.trim()));
     const messageElement = overlay.querySelector(".task-detail-message");
     const message = messageElement?.textContent || "";
@@ -151,6 +155,7 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
         ${safeUrl(task.attachmentUrl) ? `<p><a href="${safeUrl(task.attachmentUrl)}" target="_blank" rel="noopener noreferrer">Lampiran tugas</a></p>` : ""}
         <h4>Checklist</h4>
         ${checklist.length ? `<div class="task-detail-checklist">${checklist.map((item) => `<div class="task-detail-item"><label><input type="checkbox" data-detail-check="${item.id}" ${item.completed ? "checked" : ""} ${editable ? "" : "disabled"} />${escapeHtml(item.label)}</label>${task.checklistPhotoEnabled ? `<div class="task-detail-item-evidence">${item.evidenceUrl && safeUrl(item.evidenceUrl) ? `<img src="${safeUrl(item.evidenceUrl)}" alt="Bukti ${escapeHtml(item.label)}" />` : ""}<button class="secondary-button" type="button" data-detail-upload="${item.id}" ${editable ? "" : "disabled"}>${item.evidenceFileId ? "Ganti foto" : "Upload foto"}</button><input type="file" accept="image/*" hidden data-detail-file="${item.id}" /></div>` : ""}</div>`).join("")}</div>` : `<p class="task-empty">Tugas ini tidak memiliki checklist.</p>`}
+        ${showTaskEvidence ? `<div class="field"><label for="detail-evidence">Foto bukti tugas ${photoRequired ? "(wajib)" : "(opsional)"}</label>${taskPhotoUrl ? `<div class="task-report-photos"><img src="${taskPhotoUrl}" alt="Foto bukti tugas" /></div>` : ""}<button class="secondary-button" type="button" data-detail-evidence-upload ${editable ? "" : "disabled"}>${taskPhotoUrl ? "Ganti foto" : "Upload foto"}</button><input id="detail-evidence" type="file" accept="image/*" hidden data-detail-evidence-file /><small class="field-hint" data-detail-evidence-hint>JPG/PNG, maksimal 10 MB.</small></div>` : ""}
         <div class="field"><label for="detail-report">Laporan pekerjaan ${writtenRequired ? "(wajib)" : "(opsional)"}</label><textarea id="detail-report" data-detail-report rows="4" placeholder="Tuliskan hasil pekerjaan Anda">${escapeHtml(report?.description || "")}</textarea></div>
         <p class="task-detail-message ${messageTone}" role="status">${escapeHtml(message)}</p>
         <div class="task-detail-actions">
@@ -158,7 +163,8 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
           ${task.status === "in-progress" ? `<button class="primary-button" data-detail-complete ${canComplete ? "" : "disabled"}>Selesaikan tugas</button>` : ""}
           ${["completed", "revision"].includes(task.status) ? `<button class="primary-button" data-detail-submit ${canSubmit ? "" : "disabled"}>${task.status === "revision" ? "Kirim ulang tugas" : "Submit tugas"}</button>` : ""}
         </div>
-        ${task.status === "in-progress" && !canComplete ? `<p class="field-hint">Centang semua checklist${photoRequired ? " dan unggah foto pada setiap item" : ""} sebelum menyelesaikan tugas.</p>` : ""}
+        ${task.status === "in-progress" && !canComplete ? `<p class="field-hint">${!allChecked ? "Centang semua checklist. " : ""}${photoRequired ? "Unggah foto bukti tugas. " : ""}Lalu klik selesaikan tugas.</p>` : ""}
+        ${["completed", "revision"].includes(task.status) && !canSubmit && photoRequired && !photosOk ? `<p class="field-hint">Unggah foto bukti tugas sebelum submit.</p>` : ""}
         ${locked ? `<p class="field-hint">Checklist terkunci setelah tugas disubmit. Jika diminta revisi, checklist dapat diubah kembali.</p>` : ""}
         ${report ? `<p class="field-hint">Laporan terakhir: ${escapeHtml(report.status)}${report.reviewNote ? ` · ${escapeHtml(report.reviewNote)}` : ""}</p>` : ""}
       </div>
@@ -237,6 +243,62 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
       finally { input.disabled = false; input.value = ""; restore(); }
     }));
 
+    overlay.querySelector("[data-detail-evidence-upload]")?.addEventListener("click", () => {
+      overlay.querySelector("[data-detail-evidence-file]")?.click();
+    });
+    overlay.querySelector("[data-detail-evidence-file]")?.addEventListener("change", async () => {
+      const input = overlay.querySelector("[data-detail-evidence-file]");
+      const file = input.files?.[0];
+      const current = snapshot().task;
+      if (!file || !current || ["assigned", "submitted", "approved"].includes(current.status)) return;
+      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+        setMessage("Hanya gambar dengan ukuran maksimal 10 MB.");
+        input.value = "";
+        return;
+      }
+      const button = overlay.querySelector("[data-detail-evidence-upload]");
+      const hint = overlay.querySelector("[data-detail-evidence-hint]");
+      const restore = setBusy(button, "Mengunggah 0%");
+      input.disabled = true;
+      hint.textContent = "Mengunggah foto... 0%";
+      try {
+        const signature = await requestUploadSignature({ taskId: current.id, fileName: file.name, resourceType: "image" });
+        const uploaded = await uploadFileToCloudinary({
+          file,
+          signature,
+          folder: signature.folder,
+          publicId: signature.public_id,
+          onProgress: (progress) => {
+            hint.textContent = `Mengunggah foto... ${progress}%`;
+            updateBusyLabel(button, `Mengunggah ${progress}%`);
+          },
+        });
+        const metadata = await recordFileMetadata({
+          fileName: file.name,
+          resourceType: "image",
+          format: file.name.split(".").pop() || "",
+          publicId: signature.public_id,
+          secureUrl: uploaded.secure_url,
+          organizationId: current.organizationId,
+          businessId: current.businessId,
+          category: "task-evidence",
+          access: "public",
+          targetType: "taskReport",
+          targetId: current.id,
+        });
+        await updateTaskAndDailyReports(current.id, {
+          evidenceByUser: {
+            ...(current.evidenceByUser || {}),
+            [profile.uid]: { evidenceUrl: uploaded.secure_url, evidenceFileId: metadata?.id || null, evidenceAt: getJakartaISO() },
+          },
+        });
+        logAuditSafe({ profile, action: "file_uploaded", targetType: "file", targetId: metadata?.id || null, businessId: current.businessId, metadata: { taskId: current.id, category: "task-evidence" } });
+        hint.textContent = "Foto bukti tersimpan.";
+        await refresh();
+      } catch (error) { setMessage(error.message); }
+      finally { input.disabled = false; input.value = ""; restore(); }
+    });
+
     overlay.querySelector("[data-detail-complete]")?.addEventListener("click", async () => {
       const current = snapshot().task;
       if (!current || current.status !== "in-progress" || !canComplete) return;
@@ -253,7 +315,11 @@ function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
       if (!current || !["completed", "revision"].includes(current.status) || !canSubmit) return;
       if (writtenRequired && !description) { setMessage("Laporan tertulis wajib diisi."); return; }
       const checklist = current.checklistByUser?.[profile.uid] || current.checklist || [];
-      const evidence = checklist.find((item) => item.evidenceUrl && safeUrl(item.evidenceUrl));
+      const checklistEvidence = checklist.find((item) => item.evidenceUrl && safeUrl(item.evidenceUrl));
+      const standaloneEvidence = current.evidenceByUser?.[profile.uid];
+      const evidence = checklistEvidence || (safeUrl(standaloneEvidence?.evidenceUrl)
+        ? { evidenceUrl: standaloneEvidence.evidenceUrl, evidenceFileId: standaloneEvidence.evidenceFileId }
+        : null);
       const submitButton = overlay.querySelector("[data-detail-submit]");
       const restoreSubmit = setBusy(submitButton, "Mengirim tugas...");
       setMessage("");

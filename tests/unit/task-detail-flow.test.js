@@ -28,7 +28,7 @@ describe("task detail flow", () => {
   it("gates completion and submission behind checklist, photo, and written requirements", () => {
     expect(view).toContain("data-detail-check");
     expect(view).toContain("data-detail-upload");
-    expect(view).toContain('const photoRequired = task.evidenceRequired === "photo" && task.checklistPhotoEnabled');
+    expect(view).toContain('const photoRequired = task.evidenceRequired === "photo";');
     expect(view).toContain('const writtenRequired = ["written", "mixed"].includes(task.reportFormat)');
     expect(view).toContain("const canComplete = task.status === \"in-progress\" && allChecked && photosOk");
     expect(view).toContain("const canSubmit = [\"completed\", \"revision\"].includes(task.status)");
@@ -54,6 +54,17 @@ describe("task detail flow", () => {
     expect(uploadApi).toContain("Item checklist tidak ditemukan pada tugas ini.");
     expect(uploadApi).toContain("${checklistItemId ? `${checklistItemId}/` : \"\"}");
     expect(uploadService).toContain("checklistItemId })");
+  });
+
+  it("supports a standalone evidence photo even without a checklist", () => {
+    expect(view).toContain('const photoRequired = task.evidenceRequired === "photo";');
+    expect(view).toContain("Boolean(taskPhotoUrl)");
+    expect(view).toContain("&& photosOk");
+    expect(view).toContain("data-detail-evidence-upload");
+    expect(view).toContain("[data-detail-evidence-file]");
+    expect(view).toContain("evidenceByUser:");
+    expect(view).toContain("const evidence = checklistEvidence || (safeUrl(standaloneEvidence?.evidenceUrl)");
+    expect(payload).toContain("evidenceByUser:");
   });
 
   it("shows a busy state and success notice after submitting a task", () => {

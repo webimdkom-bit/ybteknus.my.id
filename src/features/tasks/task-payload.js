@@ -37,6 +37,7 @@ export function buildTaskPayload({ profile, businessId, assigneeIds, fields, par
     timeStatus: getTimeStatus({ deadline, status }),
     checklist,
     checklistByUser: Object.fromEntries(assignedTo.map((id) => [id, checklist.map((item) => ({ ...item, completed: false }))])),
+    evidenceByUser: Object.fromEntries(assignedTo.map((id) => [id, { evidenceUrl: null, evidenceFileId: null, evidenceAt: null }])),
     progressByUser: Object.fromEntries(assignedTo.map((id) => [id, 0])),
   };
 }

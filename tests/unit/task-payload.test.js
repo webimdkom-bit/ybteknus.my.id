@@ -22,6 +22,8 @@ describe("task payload", () => {
     expect(payload.createdBy).toBe("owner1");
     expect(payload.parentTaskId).toBeNull();
     expect(payload.rootTaskId).toBeNull();
+    expect(payload.evidenceByUser.u1).toEqual({ evidenceUrl: null, evidenceFileId: null, evidenceAt: null });
+    expect(payload.evidenceByUser.u2).toEqual({ evidenceUrl: null, evidenceFileId: null, evidenceAt: null });
   });
 
   it("normalizes deadline with time", () => {
