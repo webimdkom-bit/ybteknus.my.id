@@ -5,6 +5,7 @@ import { setBusy, updateBusyLabel } from "../../src/lib/utils/html.js";
 
 const main = readFileSync(fileURLToPath(new URL("../../src/main.js", import.meta.url)), "utf8");
 const css = readFileSync(fileURLToPath(new URL("../../src/styles/main.css", import.meta.url)), "utf8");
+const attendanceView = readFileSync(fileURLToPath(new URL("../../src/features/attendance/attendance-view.js", import.meta.url)), "utf8");
 
 describe("dashboard control wiring", () => {
   it("wires owner hero CTA to task manager", () => {
@@ -40,6 +41,21 @@ describe("dashboard control wiring", () => {
 
   it("marks the dashboard busy while refreshing", () => {
     expect(main).toContain('setRegionBusy(document.querySelector(".dashboard"))');
+  });
+
+  it("switches the employee attendance CTA after check-in and check-out", () => {
+    expect(main).toContain("data-employee-attendance-cta-label");
+    expect(main).toContain('setEmployeeAttendanceCta("check-out", "Check-out sekarang")');
+    expect(main).toContain('setEmployeeAttendanceCta("selesai", "Absensi selesai")');
+    expect(main).toContain('focusType: employeeAttendanceCtaMode === "check-out" ? "check-out" : "check-in"');
+    expect(main).toContain("getAttendanceDate(event) === getLocalDateKey()");
+    expect(css).toContain(".employee-attendance-card .primary-button:disabled");
+  });
+
+  it("forwards the dashboard focus target and refresh callback to the modal", () => {
+    expect(attendanceView).toContain("openAttendancePanel({ profile, focusType, onChange })");
+    expect(attendanceView).toContain("is-suggested");
+    expect(attendanceView).toContain("onChange?.()");
   });
 });
 

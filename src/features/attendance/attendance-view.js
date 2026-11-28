@@ -56,7 +56,7 @@ export async function openLocationSettings({ profile }) {
   });
 }
 
-export async function openAttendancePanel({ profile }) {
+export async function openAttendancePanel({ profile, focusType, onChange }) {
   const businessId = profile.businessIds?.[0];
   const overlay = createOverlay();
   overlay.innerHTML = `
@@ -140,9 +140,19 @@ export async function openAttendancePanel({ profile }) {
     } finally {
       restoreButtons.forEach((restore) => restore());
       await refreshAttendanceState();
+      onChange?.();
     }
   }));
-  refreshAttendanceState();
+  await refreshAttendanceState();
+  if (focusType === "check-in" || focusType === "check-out") {
+    const targetButton = overlay.querySelector(`[data-attendance-type="${focusType}"]`);
+    if (targetButton && !targetButton.disabled) {
+      targetButton.classList.add("is-suggested");
+      targetButton.focus();
+    } else if (focusType === "check-out") {
+      overlay.querySelector("[data-attendance-daily-report]")?.focus();
+    }
+  }
 }
 
 function createOverlay() {

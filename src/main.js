@@ -46,6 +46,7 @@ const activityFilters = [
 let selectedDateKey = getLocalDateKey();
 let dashboardViewModel = null;
 let activityFilter = "all";
+let employeeAttendanceCtaMode = "check-in";
 
 function renderDashboard(profile) {
   if (profile?.role === "employee") renderEmployeeDashboard(profile);
@@ -316,6 +317,7 @@ function renderAdminDashboard(profile) {
 }
 
 function renderEmployeeDashboard(profile) {
+  employeeAttendanceCtaMode = "check-in";
   const firstName = profile?.displayName?.split(" ")[0] || "there";
   app.innerHTML = `
     <div class="app-shell">
@@ -335,7 +337,7 @@ function renderEmployeeDashboard(profile) {
       <div class="content-wrap"><header class="topbar"><button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button><div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>My overview</strong></div><div class="topbar-actions"><button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>${formatDateLabel(selectedDateKey)}</span><i data-lucide="chevron-down"></i></button><button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button>${profileAvatarMarkup(profile, "avatar avatar-top")}</div></header>
         <main class="dashboard role-dashboard employee-dashboard" id="overview">
           <section class="hero-row"><div><p class="eyebrow">MY WORKDAY</p><h1>${getGreeting()},<br><em>${firstName}.</em></h1><p class="hero-copy">Lihat jadwal, absensi, dan tugas yang perlu Anda selesaikan hari ini.</p></div><button class="primary-button" data-open-attendance><i data-lucide="clock-3"></i> Buka absensi</button></section>
-          <section class="employee-action-grid"><article class="employee-attendance-card metric-dark"><div><p class="eyebrow">ABSENSI HARI INI</p><h2 data-employee-attendance-status>Memuat status...</h2><p>Aktifkan GPS untuk melakukan check-in di lokasi bisnis.</p></div><button class="primary-button" data-open-attendance>Check-in sekarang <span>→</span></button></article><article class="panel employee-schedule-card" id="employee-schedule"><div class="panel-heading"><div><h2>Jadwal hari ini</h2><p>Shift dan jam kerja Anda</p></div><i data-lucide="calendar-days"></i></div><div class="role-empty-state" data-employee-schedule><strong>Memuat jadwal...</strong><span>Jadwal akan muncul setelah Owner atau Admin menetapkan shift.</span></div></article></section>
+          <section class="employee-action-grid"><article class="employee-attendance-card metric-dark"><div><p class="eyebrow">ABSENSI HARI INI</p><h2 data-employee-attendance-status>Memuat status...</h2><p>Aktifkan GPS untuk melakukan check-in di lokasi bisnis.</p></div><button class="primary-button" data-open-attendance data-employee-attendance-cta><span data-employee-attendance-cta-label>Check-in sekarang</span> <span>→</span></button></article><article class="panel employee-schedule-card" id="employee-schedule"><div class="panel-heading"><div><h2>Jadwal hari ini</h2><p>Shift dan jam kerja Anda</p></div><i data-lucide="calendar-days"></i></div><div class="role-empty-state" data-employee-schedule><strong>Memuat jadwal...</strong><span>Jadwal akan muncul setelah Owner atau Admin menetapkan shift.</span></div></article></section>
           <section class="employee-task-summary" data-employee-task-summary><button type="button" data-open-tasks><span class="eyebrow">TUGAS SAYA</span><strong data-employee-task-count>0 tugas aktif</strong><span>Lihat & kerjakan tugas Anda →</span></button></section>
           <section class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Riwayat absensi</h2><p>Aktivitas absensi terbaru Anda</p></div></div><div class="employee-attendance-history" data-employee-attendance-history><div class="role-empty-state"><strong>Memuat riwayat...</strong></div></div></article><aside class="quick-panel"><div class="quick-label">MY PROFILE</div><h2>${firstName}<br><em>at work.</em></h2><div class="employee-profile-summary"><strong>${profile?.displayName || "Employee"}</strong><span>${escapeHtml(profile?.email || "Email belum tersedia")}</span><span data-employee-business>Bisnis sedang dimuat...</span><button class="secondary-button" data-open-profile style="margin-top:10px">Edit profil</button></div></aside></section>
         </main>
@@ -347,7 +349,17 @@ function renderEmployeeDashboard(profile) {
   wireProfileEditor(profile);
   initNotificationBadges(profile);
   wireDateFilters(profile, () => loadEmployeeDashboardData(profile, selectedDateKey));
-  document.querySelectorAll("[data-open-attendance]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openAttendancePanel({ profile }); }));
+  document.querySelectorAll("[data-open-attendance]").forEach((button) => button.addEventListener("click", (event) => {
+    event.preventDefault();
+    const isCardCta = button.hasAttribute("data-employee-attendance-cta");
+    openAttendancePanel({
+      profile,
+      ...(isCardCta ? {
+        focusType: employeeAttendanceCtaMode === "check-out" ? "check-out" : "check-in",
+        onChange: () => loadEmployeeDashboardData(profile, selectedDateKey),
+      } : {}),
+    });
+  }));
   document.querySelector("[data-open-requests]")?.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); });
   document.querySelector("[data-open-tasks]")?.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); });
   document.querySelectorAll("[data-open-daily-report]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openDailyReportViewer({ profile }); }));
@@ -364,6 +376,15 @@ async function loadEmployeeTaskSummary(uid, element) {
   } catch (error) { element.textContent = "Tugas gagal dimuat"; }
 }
 
+function setEmployeeAttendanceCta(mode, label) {
+  employeeAttendanceCtaMode = mode;
+  const button = document.querySelector("[data-employee-attendance-cta]");
+  const labelElement = document.querySelector("[data-employee-attendance-cta-label]");
+  if (!button) return;
+  button.disabled = mode !== "check-in" && mode !== "check-out";
+  if (labelElement) labelElement.textContent = label;
+}
+
 async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
   const scheduleElement = document.querySelector("[data-employee-schedule]");
   const statusElement = document.querySelector("[data-employee-attendance-status]");
@@ -377,6 +398,7 @@ async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
     scheduleElement.innerHTML = "<strong>Belum ada bisnis.</strong><span>Hubungi Owner untuk mendapatkan penempatan bisnis.</span>";
     statusElement.textContent = "Belum terdaftar";
     historyElement.innerHTML = "<div class=\"role-empty-state\"><strong>Belum ada riwayat.</strong><span>Akun belum memiliki bisnis aktif.</span></div>";
+    setEmployeeAttendanceCta("unavailable", "Check-in sekarang");
     return;
   }
   try {
@@ -404,6 +426,12 @@ async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
       : checkIn
         ? (checkIn.scheduleStatus === "unscheduled" ? `Sudah check-in · ${offScheduleLabel(checkIn, false)}` : "Sudah check-in")
         : "Belum check-in";
+    const currentAttendance = attendance.filter((event) => event.businessId === businessId && getAttendanceDate(event) === getLocalDateKey());
+    const hasCheckIn = currentAttendance.some((event) => event.type === "check-in");
+    const hasCheckOut = currentAttendance.some((event) => event.type === "check-out");
+    if (hasCheckOut) setEmployeeAttendanceCta("selesai", "Absensi selesai");
+    else if (hasCheckIn) setEmployeeAttendanceCta("check-out", "Check-out sekarang");
+    else setEmployeeAttendanceCta("check-in", "Check-in sekarang");
     const history = attendance.filter((event) => event.businessId === businessId).sort((a, b) => `${getAttendanceDate(b)}${getAttendanceTime(b)}`.localeCompare(`${getAttendanceDate(a)}${getAttendanceTime(a)}`)).slice(0, 8);
     historyElement.innerHTML = history.length ? history.map((event) => {
       const rowStatus = event.scheduleStatus === "unscheduled"
@@ -414,6 +442,7 @@ async function loadEmployeeDashboardData(profile, dateKey = selectedDateKey) {
   } catch (error) {
     scheduleElement.innerHTML = `<strong>Data belum tersedia.</strong><span>${escapeHtml(error.message)}</span>`;
     historyElement.innerHTML = `<div class="role-empty-state"><strong>Riwayat gagal dimuat.</strong><span>${escapeHtml(error.message)}</span></div>`;
+    setEmployeeAttendanceCta("unavailable", "Check-in sekarang");
   }
 }
 
