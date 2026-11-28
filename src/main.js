@@ -47,6 +47,7 @@ let selectedDateKey = getLocalDateKey();
 let dashboardViewModel = null;
 let activityFilter = "all";
 let employeeAttendanceCtaMode = "check-in";
+let activeTaskPage = null;
 
 function renderDashboard(profile) {
   if (profile?.role === "employee") renderEmployeeDashboard(profile);
@@ -207,7 +208,11 @@ function renderOwnerDashboard(profile) {
     if (profile.role === "owner") openAdminManager({ profile });
   });
   document.querySelectorAll("[data-open-requests]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openRequestManager({ profile }); }));
-  document.querySelectorAll("[data-open-tasks]").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); openTaskManager({ profile }); }));
+  document.querySelectorAll("[data-open-tasks]").forEach((button) => button.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (profile.role === "owner") renderTaskPage(profile);
+    else openTaskManager({ profile });
+  }));
   document.querySelector("[data-open-attendance]").addEventListener("click", (event) => {
     event.preventDefault();
     if (profile.role === "employee") openAttendancePanel({ profile });
@@ -225,6 +230,78 @@ function renderOwnerDashboard(profile) {
   wireDateFilters(profile, () => refreshDashboard(profile));
   wireActivityFilter();
   document.querySelector("[data-sign-out]").addEventListener("click", () => signOutUser());
+}
+
+async function renderTaskPage(profile) {
+  app.innerHTML = `
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      ${profileIdentityMarkup(profile)}
+      <div class="workspace-select">
+        <span>WORKSPACE</span>
+        <button class="business-switcher" type="button" data-business-switcher><span><i data-lucide="building-2"></i> <b data-business-switcher-label>Semua bisnis</b></span><i data-lucide="chevron-down"></i></button><div class="business-switcher-menu" data-business-switcher-menu hidden></div>
+      </div>
+      <nav class="main-nav" aria-label="Navigasi utama">
+        <a class="nav-item" href="#overview"><i data-lucide="layout-dashboard"></i><span>Overview</span><b>01</b></a>
+        <a class="nav-item" href="#businesses" data-open-businesses><i data-lucide="building-2"></i><span>Bisnis</span><b>02</b></a>
+        <a class="nav-item" href="#people" data-open-registrations><i data-lucide="users"></i><span>Registrasi</span><b>03</b></a>
+        <a class="nav-item" href="#employees" data-open-employees-owner><i data-lucide="users"></i><span>Karyawan</span><b>04</b></a>
+        <a class="nav-item" href="#owners" data-open-owners><i data-lucide="users"></i><span>Owners</span><b>05</b></a>
+        <a class="nav-item" href="#admins" data-open-admins><i data-lucide="user-cog"></i><span>Admins</span><b>05</b></a>
+        <a class="nav-item" href="#requests" data-open-requests><i data-lucide="file-text"></i><span>Pengajuan</span><b>06</b></a>
+        <a class="nav-item" href="#attendance" data-open-attendance><i data-lucide="clock-3"></i><span>Absensi GPS</span><b>07</b></a>
+        <a class="nav-item" href="#schedules" data-open-schedules><i data-lucide="calendar-days"></i><span>Jadwal & shift</span><b>07</b></a>
+        <a class="nav-item active" href="#tasks" data-open-tasks><i data-lucide="clipboard-check"></i><span>Tugas</span><b>08</b></a>
+        <a class="nav-item" href="#reports" data-open-reports><i data-lucide="file-bar-chart-2"></i><span>Laporan</span><b>09</b></a>
+        <a class="nav-item" href="#daily-report" data-open-daily-report><i data-lucide="file-text"></i><span>Laporan harian</span><b>11</b></a>
+        <a class="nav-item" href="#audit" data-open-audit><i data-lucide="shield-check"></i><span>Audit trail</span><b>10</b></a>
+        <div class="org-switch-wrap"><button class="nav-item org-switch-button" type="button" data-org-switch><i data-lucide="building-2"></i><span data-org-label>Memuat organization...</span><i data-lucide="chevron-down"></i></button><div class="org-switch-menu" data-org-menu hidden></div></div>
+        <a class="nav-item" href="#files" data-open-files><i data-lucide="folder-open"></i><span>File</span><b>12</b></a>
+      </nav>
+      <div class="sidebar-bottom">
+        <a class="nav-item" href="#settings" data-open-location><i data-lucide="settings-2"></i><span>Lokasi & radius</span></a>
+        <div class="profile-mini">
+          ${profileAvatarMarkup(profile, "avatar")}
+          <div><strong data-profile-name>${profile?.displayName || "User"}</strong><span data-profile-role>${profileRoleLabel(profile)}</span></div>
+          <button class="icon-button" data-sign-out aria-label="Keluar"><i data-lucide="log-out"></i></button>
+        </div>
+      </div>
+    </aside>
+    <div class="content-wrap">
+      <header class="topbar">
+        <button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button>
+        <div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>Tugas</strong></div>
+        <div class="topbar-actions">
+          <button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>Memuat tanggal...</span><i data-lucide="chevron-down"></i></button>
+          <button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button>
+          ${profileAvatarMarkup(profile, "avatar avatar-top")}
+        </div>
+      </header>
+      <main class="dashboard task-page-dashboard" id="tasks">Memuat tugas...</main>
+    </div>
+  </div>`;
+  renderDashboardIcons();
+  wireDashboardChrome();
+  wireProfileEditor(profile);
+  wireBusinessSwitcher(profile, () => {});
+  initNotificationBadges(profile);
+  wireOrganizationSwitcher(profile);
+  document.querySelectorAll(".sidebar a.nav-item").forEach((item) => item.addEventListener("click", (event) => {
+    event.preventDefault();
+    const trigger = [...item.attributes].map((attribute) => attribute.name).find((name) => name.startsWith("data-open-"));
+    if (trigger === "data-open-tasks") return;
+    activeTaskPage?.close();
+    activeTaskPage = null;
+    renderDashboard(profile);
+    if (trigger) requestAnimationFrame(() => document.querySelector(`[${trigger}]`)?.click());
+  }));
+  const handle = await openTaskManager({
+    profile,
+    mount: document.querySelector(".task-page-dashboard"),
+    pageMode: true,
+    onClose: () => { if (activeTaskPage === handle) activeTaskPage = null; },
+  });
+  activeTaskPage = handle;
 }
 
 async function wireOrganizationSwitcher(profile) {

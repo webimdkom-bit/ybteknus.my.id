@@ -31,14 +31,15 @@ import { NOTIFICATION_TYPES, notifySafe } from "../notifications/notification-se
 import { createTaskForAssignees } from "./task-service.js";
 import { canManageBusinessPermission } from "../permissions/permission-service.js";
 
-export async function openTaskManager({ profile, context = null }) {
+export async function openTaskManager({ profile, context = null, mount = null, pageMode = false, onClose = null }) {
   const overlay = document.createElement("div");
-  overlay.className = "task-overlay";
+  overlay.className = pageMode ? "task-overlay task-page" : "task-overlay";
   const title = context ? `Tugas ${context.label || "karyawan"}` : profile.role === "employee" ? "Tugas saya" : "Task management";
   const subtitle = context ? `Daftar tugas yang ditugaskan kepada ${context.label || "karyawan"} ini.` : profile.role === "employee" ? "Kerjakan tugas dan kirim laporan pekerjaan Anda." : "Lihat, delegasikan, dan pantau tugas bertingkat.";
   const canCreateTask = profile.role === "owner" || (profile.memberships || []).some((membership) => membership.status !== "inactive" && (membership.permissions || []).includes("manageTasks"));
-  overlay.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><div class="task-modal-head"><div><p class="eyebrow">WORK MANAGEMENT</p><h2 id="task-title">${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p></div><button class="icon-button task-close" aria-label="Tutup">×</button></div><div class="task-layout">${profile.role === "employee" || context || !canCreateTask ? "" : taskFormMarkup()}<div class="task-list-wrap"><div class="task-list-heading"><h3>Daftar tugas</h3><span class="task-count">0</span></div><div class="task-list-toolbar"><input class="task-list-search" type="search" placeholder="Cari tugas..." aria-label="Cari tugas" /><select class="task-list-view" aria-label="Filter tampilan"><option value="active">Aktif</option><option value="all">Semua</option><option value="completed">Selesai</option><option value="cancelled">Dibatalkan</option><option value="archived">Arsip</option></select><select class="task-list-status" aria-label="Filter status"><option value="">Semua status</option><option value="assigned">Assigned</option><option value="in-progress">In progress</option><option value="submitted">Submitted</option><option value="revision">Revision</option><option value="approved">Approved</option><option value="cancelled">Cancelled</option></select><select class="task-list-priority" aria-label="Filter prioritas"><option value="">Semua prioritas</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select><select class="task-list-business" aria-label="Filter bisnis"><option value="">Semua bisnis</option></select><select class="task-list-sort" aria-label="Urutkan"><option value="newest">Terbaru</option><option value="deadline">Deadline terdekat</option><option value="priority">Prioritas</option></select></div><p class="task-list-range" aria-live="polite"></p><div class="task-list-scroll"><div class="task-list"><p class="task-empty">Memuat tugas...</p></div></div><button class="secondary-button task-load-more" type="button" hidden>Muat lebih banyak</button></div></div></section>`;
-  document.body.append(overlay);
+  overlay.innerHTML = `<section class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-title"><div class="task-modal-head"><div><p class="eyebrow">WORK MANAGEMENT</p><h2 id="task-title">${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p></div><button class="icon-button task-close" aria-label="Tutup">×</button></div><div class="task-layout">${profile.role === "employee" || context || !canCreateTask ? "" : taskFormMarkup()}<div class="task-list-wrap"><div class="task-list-heading"><h3>Daftar tugas</h3><span class="task-count">0</span></div><div class="task-list-toolbar"><input class="task-list-search" type="search" placeholder="Cari tugas..." aria-label="Cari tugas" /><select class="task-list-view" aria-label="Filter tampilan"><option value="active">Aktif</option><option value="all">Semua</option><option value="completed">Selesai</option><option value="cancelled">Dibatalkan</option><option value="archived">Arsip</option></select><select class="task-list-status" aria-label="Filter status"><option value="">Semua status</option><option value="assigned">Assigned</option><option value="in-progress">In progress</option><option value="submitted">Submitted</option><option value="revision">Revision</option><option value="approved">Approved</option><option value="cancelled">Cancelled</option></select><select class="task-list-priority" aria-label="Filter prioritas"><option value="">Semua prioritas</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select><select class="task-list-business" aria-label="Filter bisnis"><option value="">Semua bisnis</option></select><select class="task-list-sort" aria-label="Urutkan"><option value="newest">Terbaru</option><option value="deadline">Deadline terdekat</option><option value="priority">Prioritas</option></select></div><p class="task-list-range" aria-live="polite"></p><div class="task-list-scroll"><div class="task-list"><p class="task-empty">Memuat tugas...</p></div></div><button class="secondary-button task-load-more" type="button" hidden>Muat lebih banyak</button></div>${pageMode ? `<div class="task-page-detail" data-task-page-detail><div class="role-empty-state"><strong>Pilih tugas.</strong><span>Detail tugas akan tampil di sini.</span></div></div>` : ""}</div></section>`;
+  if (pageMode && mount) mount.innerHTML = "";
+  (mount || document.body).append(overlay);
   const photoViewer = document.createElement("div");
   photoViewer.className = "task-photo-viewer";
   photoViewer.hidden = true;
@@ -49,9 +50,9 @@ export async function openTaskManager({ profile, context = null }) {
   photoViewer.addEventListener("click", (event) => { if (event.target === photoViewer) hidePhotoViewer(); });
   let stopTaskWatch = null;
   let detailOverlay = null;
-  const close = () => { detailOverlay?.remove(); detailOverlay = null; stopTaskWatch?.(); overlay.remove(); };
+  const close = () => { detailOverlay?.remove(); detailOverlay = null; stopTaskWatch?.(); overlay.remove(); onClose?.(); };
   overlay.querySelector(".task-close").addEventListener("click", close);
-  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.addEventListener("click", (event) => { if (!pageMode && event.target === overlay) close(); });
 
   let taskLimit = 200;
   let lastTasks = [];
@@ -73,6 +74,8 @@ export async function openTaskManager({ profile, context = null }) {
       getSnapshot: () => ({ tasks: lastTasks, reports: lastReports }),
       reload,
       onClose: () => { detailOverlay = null; },
+      detailMount: pageMode ? overlay.querySelector("[data-task-page-detail]") : null,
+      pageMode,
     });
   };
 
@@ -107,14 +110,16 @@ export async function openTaskManager({ profile, context = null }) {
     const stops = (profile.businessIds || []).map((businessId) => watchTasksForBusiness(profile.organizationId, businessId, () => reload()));
     stopTaskWatch = () => stops.forEach((stop) => stop());
   }
+  return { close };
 }
 
-function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose }) {
+function openTaskDetail({ profile, taskId, getSnapshot, reload, onClose, detailMount = null, pageMode = false }) {
   const overlay = document.createElement("div");
-  overlay.className = "task-detail-overlay";
-  document.body.append(overlay);
+  overlay.className = pageMode ? "task-detail-overlay task-detail-page" : "task-detail-overlay";
+  if (pageMode && detailMount) detailMount.innerHTML = "";
+  (detailMount || document.body).append(overlay);
   const close = () => { overlay.remove(); onClose?.(); };
-  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.addEventListener("click", (event) => { if (!pageMode && event.target === overlay) close(); });
 
   const snapshot = () => {
     const { tasks, reports } = getSnapshot();
