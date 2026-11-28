@@ -43,5 +43,6 @@ describe("owner file manager", () => {
     expect(view).toContain('link.download = file.fileName || "file"');
     expect(css).toContain(".file-viewer-content iframe");
     expect(css).toContain(".file-viewer-actions");
+    expect(view).toContain("Hapus file ini secara permanen? File dan datanya akan dihapus.");
   });
 });

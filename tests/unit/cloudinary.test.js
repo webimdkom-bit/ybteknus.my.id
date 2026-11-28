@@ -37,6 +37,13 @@ describe("Cloudinary wiring", () => {
     process.env.CLOUDINARY_API_SECRET = previous.secret;
   });
 
+  it("deletes the Firestore metadata together with the Cloudinary asset", () => {
+    expect(remove).toContain('cloudinary.uploader.destroy(file.cloudinaryPublicId)');
+    expect(remove).toContain('db.collection("files").doc(fileId).delete()');
+    expect(remove).not.toContain('status: "deleted"');
+    expect(remove).toContain('action: "file_deleted"');
+  });
+
   it("exposes Cloudinary status through health", () => {
     expect(health).toContain('isCloudinaryConfigured() ? "configured" : "missing"');
     expect(upload).toContain("Cloudinary belum dikonfigurasi.");

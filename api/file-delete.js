@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   configureCloudinary();
   const result = await cloudinary.uploader.destroy(file.cloudinaryPublicId);
   const nowIso = jakartaNow();
-  await db.collection("files").doc(fileId).update({ status: "deleted", deletedBy: uid, deletedAt: nowIso });
+  await db.collection("files").doc(fileId).delete();
   await db.collection("auditLogs").add({
     actorId: uid,
     actorName: actor.displayName || actor.email || "",

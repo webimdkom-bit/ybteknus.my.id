@@ -110,7 +110,7 @@ export async function openFileManager({ profile }) {
         ? files.map((file) => {
           const uploader = names.users.get(file.uploadedBy) || "Pengirim tidak diketahui";
           const business = file.businessId ? (names.businesses.get(file.businessId) || "Bisnis tidak ditemukan") : "Tanpa bisnis";
-          return `<article class="file-row"><div class="file-icon">${file.resourceType === "image" ? "IMG" : "DOC"}</div><div class="file-copy"><strong>${escapeHtml(file.fileName)}</strong><span>Dari ${escapeHtml(sourceLabel(file))} · ${escapeHtml(file.access || "public")} · ${escapeHtml(formatDate(file.createdAt))}</span><small class="file-meta">Dikirim oleh ${escapeHtml(uploader)} · Bisnis: ${escapeHtml(business)}</small></div><div class="file-actions"><button class="secondary-button" data-file-open="${file.id}">Buka</button><button class="secondary-button" data-file-download="${file.id}">Unduh</button>${file.status !== "deleted" && (profile.role === "owner" || file.uploadedBy === profile.uid || (profile.role === "admin" && canAccessBusiness(profile, file.businessId))) ? `<button class="reject-registration" data-file-delete="${file.id}">Hapus</button>` : ""}</div></article>`;
+          return `<article class="file-row"><div class="file-icon">${file.resourceType === "image" ? "IMG" : "DOC"}</div><div class="file-copy"><strong>${escapeHtml(file.fileName)}</strong><span>Dari ${escapeHtml(sourceLabel(file))} · ${escapeHtml(file.access || "public")} · ${escapeHtml(formatDate(file.createdAt))}</span><small class="file-meta">Dikirim oleh ${escapeHtml(uploader)} · Bisnis: ${escapeHtml(business)}</small></div><div class="file-actions"><button class="secondary-button" data-file-open="${file.id}">Buka</button><button class="secondary-button" data-file-download="${file.id}">Unduh</button>${(profile.role === "owner" || file.uploadedBy === profile.uid || (profile.role === "admin" && canAccessBusiness(profile, file.businessId))) ? `<button class="reject-registration" data-file-delete="${file.id}">Hapus</button>` : ""}</div></article>`;
         }).join("")
         : `<div class="role-empty-state"><strong>Belum ada file.</strong><span>Lampiran tugas dan dokumen akan tampil di sini.</span></div>`;
       list.querySelectorAll("[data-file-open]").forEach((button) => button.addEventListener("click", async () => {
@@ -143,7 +143,7 @@ export async function openFileManager({ profile }) {
         finally { restore(); }
       }));
       list.querySelectorAll("[data-file-delete]").forEach((button) => button.addEventListener("click", async () => {
-        if (!window.confirm("Hapus file ini dari Cloudinary?")) return;
+        if (!window.confirm("Hapus file ini secara permanen? File dan datanya akan dihapus.")) return;
         try { await requestFileDeletion(button.dataset.fileDelete); hideViewer(); await load(); }
         catch (error) { window.alert(error.message); }
       }));
