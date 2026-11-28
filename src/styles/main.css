@@ -411,3 +411,9 @@ body { min-width: 0; }
 .task-photo-viewer-inner { position: relative; background: #f4f6f1; padding: 28px; max-width: min(100%, 1000px); max-height: 90vh; max-height: 90dvh; overflow: auto; }
 .task-photo-viewer-inner .task-photo-close { position: absolute; top: 8px; right: 8px; }
 .task-photo-list img { max-width: min(320px, 100%); max-height: 60vh; object-fit: contain; border: 1px solid #dfe4dc; background: #fff; }
+.file-meta { display: block; color: #899392; font-size: 9px; margin-top: 3px; overflow-wrap: anywhere; }
+.file-viewer-content { max-width: 100%; text-align: center; }
+.file-viewer-content img { max-width: 100%; max-height: 62vh; object-fit: contain; border: 1px solid #dfe4dc; background: #fff; }
+.file-viewer-content iframe { width: min(760px, 72vw); height: 60vh; border: 1px solid #dfe4dc; background: #fff; }
+.file-viewer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+@media (max-width: 720px) { .file-meta { font-size: 11px; } .file-viewer-content iframe { width: 100%; height: 52vh; } }
