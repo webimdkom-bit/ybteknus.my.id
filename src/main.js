@@ -48,6 +48,7 @@ let dashboardViewModel = null;
 let activityFilter = "all";
 let employeeAttendanceCtaMode = "check-in";
 let activeTaskPage = null;
+let taskPageRequest = 0;
 
 function renderDashboard(profile) {
   if (profile?.role === "employee") renderEmployeeDashboard(profile);
@@ -233,6 +234,7 @@ function renderOwnerDashboard(profile) {
 }
 
 async function renderTaskPage(profile) {
+  const requestId = ++taskPageRequest;
   app.innerHTML = `
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
@@ -272,7 +274,6 @@ async function renderTaskPage(profile) {
         <button class="icon-button menu-trigger" data-sidebar-open aria-label="Buka menu"><i data-lucide="menu"></i></button>
         <div class="breadcrumb"><span>Workspace</span><i data-lucide="chevron-down"></i><strong>Tugas</strong></div>
         <div class="topbar-actions">
-          <button class="date-filter"><i data-lucide="calendar-days"></i><span data-dashboard-date>Memuat tanggal...</span><i data-lucide="chevron-down"></i></button>
           <button class="icon-button notification-button" aria-label="Notifikasi"><i data-lucide="bell"></i><span></span></button>
           ${profileAvatarMarkup(profile, "avatar avatar-top")}
         </div>
@@ -283,13 +284,18 @@ async function renderTaskPage(profile) {
   renderDashboardIcons();
   wireDashboardChrome();
   wireProfileEditor(profile);
-  wireBusinessSwitcher(profile, () => {});
+  wireBusinessSwitcher(profile, () => {
+    const breadcrumb = document.querySelector(".breadcrumb strong");
+    if (breadcrumb) breadcrumb.textContent = "Tugas";
+    document.dispatchEvent(new CustomEvent("task-business-scope", { detail: profile.selectedBusinessId || "" }));
+  });
   initNotificationBadges(profile);
   wireOrganizationSwitcher(profile);
   document.querySelectorAll(".sidebar a.nav-item").forEach((item) => item.addEventListener("click", (event) => {
     event.preventDefault();
     const trigger = [...item.attributes].map((attribute) => attribute.name).find((name) => name.startsWith("data-open-"));
     if (trigger === "data-open-tasks") return;
+    taskPageRequest += 1;
     activeTaskPage?.close();
     activeTaskPage = null;
     renderDashboard(profile);
@@ -301,6 +307,10 @@ async function renderTaskPage(profile) {
     pageMode: true,
     onClose: () => { if (activeTaskPage === handle) activeTaskPage = null; },
   });
+  if (requestId !== taskPageRequest) {
+    handle?.close();
+    return;
+  }
   activeTaskPage = handle;
 }
 

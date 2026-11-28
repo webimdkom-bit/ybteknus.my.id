@@ -23,7 +23,11 @@ describe("owner full-page task workspace", () => {
     expect(view).toContain('overlay.className = pageMode ? "task-overlay task-page" : "task-overlay"');
     expect(view).toContain('(mount || document.body).append(overlay)');
     expect(view).toContain("data-task-page-detail");
-    expect(view).toContain("detailMount: pageMode ? overlay.querySelector(\"[data-task-page-detail]\") : null");
+    expect(view).toContain("detailMount: pageMode ? detailMount : null");
+    expect(view).toContain("function taskPageMarkup");
+    expect(view).toContain("data-task-create-drawer");
+    expect(view).toContain("data-task-detail-scrim");
+    expect(view).toContain("function managerTaskDetailMarkup");
     expect(view).toContain("(detailMount || document.body).append(overlay)");
     expect(view).toContain("return { close };");
     expect(view).toContain("if (!pageMode && event.target === overlay) close();");
@@ -33,6 +37,8 @@ describe("owner full-page task workspace", () => {
     expect(css).toContain(".task-overlay.task-page { position: static;");
     expect(css).toContain(".task-overlay.task-page .task-layout { grid-template-columns:");
     expect(css).toContain(".task-page-detail { position: sticky;");
+    expect(css).toContain(".task-page-list .task-list-toolbar");
+    expect(css).toContain("body.task-detail-open .task-page-detail");
     expect(css).toContain(".task-detail-overlay.task-detail-page .task-detail-modal");
     expect(css).toContain(".task-photo-viewer[hidden] { display: none; }");
   });
