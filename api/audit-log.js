@@ -16,7 +16,7 @@ const ALLOWED_ACTIONS = new Set([
   "file_uploaded", "file_deleted",
   "account_status_changed", "account_deactivated", "employee_password_reset", "owner_created",
   "admin_created", "admin_access_changed", "admin_deactivated", "admin_activated",
-  "business_created", "business_updated", "business_registration_toggled", "business_location_changed",
+  "business_created", "business_updated", "business_registration_toggled", "business_location_changed", "business_activated", "business_deactivated", "business_deleted",
   "employee_transferred",
   "shift_created", "shift_updated", "shift_deleted", "schedule_assigned", "schedule_range_assigned", "schedule_updated", "schedule_deleted",
   "request_submitted", "request_approved", "request_rejected",

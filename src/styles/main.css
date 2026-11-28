@@ -417,3 +417,8 @@ body { min-width: 0; }
 .file-viewer-content iframe { width: min(760px, 72vw); height: 60vh; border: 1px solid #dfe4dc; background: #fff; }
 .file-viewer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 @media (max-width: 720px) { .file-meta { font-size: 11px; } .file-viewer-content iframe { width: 100%; height: 52vh; } }
+.business-delete-confirm { display: grid; gap: 12px; border: 1px solid #e1e7df; background: #fff; padding: 16px; margin-top: 18px; }
+.business-delete-confirm[hidden] { display: none; }
+.business-delete-confirm strong { color: #a35c49; font-size: 13px; }
+.business-delete-confirm p { color: #899392; font-size: 10px; line-height: 1.6; margin: 4px 0 0; }
+.business-delete-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }

@@ -1,7 +1,9 @@
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { listBusinessesForOrganization, listEmployees, transferEmployee, updateBusiness } from "../../lib/firestore/repositories.js";
-import { createOwnerBusiness } from "./business-service.js";
+import { createOwnerBusiness, deleteOwnerBusiness } from "./business-service.js";
 import { logAuditSafe } from "../audit-trail/index.js";
-import { escapeHtml } from "../../lib/utils/html.js";
+import { escapeHtml, setBusy } from "../../lib/utils/html.js";
+import { auth } from "../../lib/firebase/firebase.js";
 import { isAcceptingRegistrations, isBusinessActive } from "../../lib/utils/business.js";
 
 export async function openBusinessManager({ profile }) {
@@ -20,6 +22,12 @@ export async function openBusinessManager({ profile }) {
         <div class="business-list-wrap"><div class="business-list-heading"><h3>Daftar bisnis</h3><span class="business-count">0</span></div><div class="managed-business-list"><p class="business-empty">Memuat bisnis...</p></div></div>
         <div class="employee-transfer-panel"><div><h3>Transfer employee</h3><p class="business-form-copy">Pindahkan employee tanpa mengubah histori absensi dan tugas lama.</p></div><form class="employee-transfer-form"><div class="field"><label for="transfer-employee">Employee</label><select id="transfer-employee" required><option value="">Memuat employee...</option></select></div><div class="field"><label for="transfer-business">Bisnis tujuan</label><select id="transfer-business" required><option value="">Pilih bisnis tujuan</option></select></div><p class="transfer-message" role="status"></p><p class="business-error transfer-error" role="alert"></p><button class="primary-button" type="submit">Transfer employee <span>→</span></button></form></div>
       </div>
+      <div class="business-delete-confirm" data-delete-confirm hidden>
+        <div><strong>Hapus bisnis secara permanen?</strong><p>Bisnis <b data-delete-name></b>, keanggotaan, dan penempatan karyawan akan dihapus. Riwayat absensi, tugas, dan laporan tetap tersimpan.</p></div>
+        <div class="field"><label for="delete-password">Password owner</label><input id="delete-password" type="password" data-delete-password autocomplete="current-password" placeholder="Masukkan password owner" /></div>
+        <p class="business-error" data-delete-error role="alert"></p>
+        <div class="business-delete-actions"><button class="secondary-button" type="button" data-delete-cancel>Batal</button><button class="reject-registration" type="button" data-delete-confirm-button>Hapus permanen</button></div>
+      </div>
     </section>
   `;
   document.body.append(overlay);
@@ -31,8 +39,10 @@ export async function openBusinessManager({ profile }) {
   const employeeSelect = overlay.querySelector("#transfer-employee");
   const transferBusinessSelect = overlay.querySelector("#transfer-business");
   let editingBusinessId = null;
+  let pendingDeleteId = null;
   let transferEmployees = [];
   let transferBusinesses = [];
+  const deletePanel = overlay.querySelector("[data-delete-confirm]");
   const loadBusinesses = async () => {
     try {
       const businesses = await listBusinessesForOrganization(profile.organizationId);
@@ -59,11 +69,52 @@ export async function openBusinessManager({ profile }) {
          overlay.querySelector(".business-form-title").textContent = "Edit bisnis";
          overlay.querySelector(".business-submit-label").textContent = "Simpan perubahan";
          overlay.querySelector("#business-name").value = business.name || "";
-         overlay.querySelector("#business-city").value = business.city || "";
-       }));
+          overlay.querySelector("#business-city").value = business.city || "";
+        }));
+        list.querySelectorAll("[data-delete-business]").forEach((button) => button.addEventListener("click", () => {
+          const business = businesses.find((item) => item.id === button.dataset.deleteBusiness);
+          if (!business) return;
+          pendingDeleteId = business.id;
+          overlay.querySelector("[data-delete-name]").textContent = business.name || "bisnis ini";
+          overlay.querySelector("[data-delete-error]").textContent = "";
+          overlay.querySelector("[data-delete-password]").value = "";
+          deletePanel.hidden = false;
+          overlay.querySelector("[data-delete-password]").focus();
+        }));
     } catch (error) { list.innerHTML = `<p class="business-error">${error.message}</p>`; }
   };
   await loadBusinesses();
+  overlay.querySelector("[data-delete-cancel]").addEventListener("click", () => {
+    deletePanel.hidden = true;
+    pendingDeleteId = null;
+  });
+  overlay.querySelector("[data-delete-confirm-button]").addEventListener("click", async () => {
+    if (!pendingDeleteId) return;
+    const password = overlay.querySelector("[data-delete-password]").value;
+    const error = overlay.querySelector("[data-delete-error]");
+    error.textContent = "";
+    if (!password) { error.textContent = "Password owner wajib diisi."; return; }
+    const button = overlay.querySelector("[data-delete-confirm-button]");
+    const restore = setBusy(button, "Menghapus...");
+    try {
+      const user = auth.currentUser;
+      if (!user?.email) throw new Error("Sesi owner tidak ditemukan.");
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+      const businessId = pendingDeleteId;
+      await deleteOwnerBusiness({ businessId });
+      if (editingBusinessId === businessId) {
+        editingBusinessId = null;
+        overlay.querySelector("#business-form").reset();
+      }
+      deletePanel.hidden = true;
+      pendingDeleteId = null;
+      await loadBusinesses();
+    } catch (deleteError) {
+      error.textContent = ["auth/wrong-password", "auth/invalid-credential"].includes(deleteError?.code)
+        ? "Password owner tidak benar."
+        : deleteError.message;
+    } finally { restore(); }
+  });
   try {
     transferEmployees = await listEmployees(profile.organizationId);
     employeeSelect.innerHTML = transferEmployees.length ? `<option value="">Pilih employee</option>${transferEmployees.map((employee) => `<option value="${employee.id}" data-current-business="${employee.businessIds?.[0] || ""}">${employee.displayName || employee.email} · ${transferBusinesses.find((business) => business.id === employee.businessIds?.[0])?.name || "Belum ditempatkan"}</option>`).join("")}` : `<option value="">Belum ada employee</option>`;
@@ -118,5 +169,5 @@ export async function openBusinessManager({ profile }) {
 function businessRow(business) {
   const accepting = isAcceptingRegistrations(business);
   const active = isBusinessActive(business);
-  return `<div class="managed-business-row ${active ? "" : "is-inactive"}"><div class="business-row-mark">${escapeHtml(business.name.slice(0, 1)).toUpperCase()}</div><div class="managed-business-info"><strong>${escapeHtml(business.name)}</strong><span>${escapeHtml(business.city || "Kota belum diatur")} · ${active ? "Aktif" : "Nonaktif"}</span></div><button class="business-edit-button" data-edit-business="${business.id}">Edit</button><button class="registration-toggle ${accepting ? "is-open" : ""}" data-toggle-registration="${business.id}" data-next-value="${!accepting}">${accepting ? "Registrasi terbuka" : "Registrasi ditutup"}</button><button class="business-status-button" data-toggle-status="${business.id}" data-next-status="${active ? "inactive" : "active"}">${active ? "Nonaktifkan" : "Aktifkan"}</button></div>`;
+  return `<div class="managed-business-row ${active ? "" : "is-inactive"}"><div class="business-row-mark">${escapeHtml(business.name.slice(0, 1)).toUpperCase()}</div><div class="managed-business-info"><strong>${escapeHtml(business.name)}</strong><span>${escapeHtml(business.city || "Kota belum diatur")} · ${active ? "Aktif" : "Nonaktif"}</span></div><button class="business-edit-button" data-edit-business="${business.id}">Edit</button><button class="registration-toggle ${accepting ? "is-open" : ""}" data-toggle-registration="${business.id}" data-next-value="${!accepting}">${accepting ? "Registrasi terbuka" : "Registrasi ditutup"}</button><button class="business-status-button" data-toggle-status="${business.id}" data-next-status="${active ? "inactive" : "active"}">${active ? "Nonaktifkan" : "Aktifkan"}</button><button class="reject-registration" data-delete-business="${business.id}">Hapus</button></div>`;
 }
